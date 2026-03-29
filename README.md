@@ -1,0 +1,95 @@
+# ☀️ PV-Analyse mit Speichervergleich
+
+https://pv-analysis.streamlit.app/
+
+Eine interaktive Streamlit-App zur Simulation und Wirtschaftlichkeitsanalyse von Photovoltaik-Anlagen mit Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlagen.
+
+## Features
+
+- **PVGIS-Integration** – Stündliche PV-Ertragsdaten direkt von der EU-Datenbank (2005–2023)
+- **Standortsuche** – Koordinaten per Ortsname via OpenStreetMap Nominatim
+- **Flexible PV-Konfiguration** – Beliebig viele Module mit individueller Leistung, Ausrichtung und Neigung
+- **Wechselrichter-Limit** – 800 W Standard (Balkonkraftwerk), deaktivierbar für größere Anlagen
+- **DC- und AC-gekoppelte Speicher** – Korrekte Simulation beider Anbindungsarten:
+  - **DC-gekoppelt**: Batterie lädt direkt vom DC-Bus, Wechselrichter-Limit gilt nur für die AC-Seite
+  - **AC-gekoppelt**: Wechselrichter begrenzt den gesamten PV-Ertrag
+- **Verbrauchsprofil** – Einfacher Modus (Jahresverbrauch → skaliertes Tagesprofil) oder stündliche Eingabe
+- **Lastverschiebung** – Optionale Zusatzlast an ertragreichen Sonnentagen (z. B. Waschmaschine)
+- **Periodische Zusatzlast** – Regelmäßiger Verbrauch unabhängig vom Wetter (z. B. Warmwasser)
+- **Einspeisevergütung** – Berücksichtigung der Vergütung in allen Wirtschaftlichkeitsberechnungen
+- **Mehrere Speicher-Szenarien** – Vergleich von „Ohne Speicher" bis zu beliebig vielen Batterie-Optionen
+- **Langzeitvergleich PV vs. ETF** – Kumulierte Rendite über konfigurierbare Laufzeit
+- **Konfiguration teilen** – Alle Parameter als komprimierter URL-Parameter
+
+## Schnellstart
+
+```bash
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
+
+### Voraussetzungen
+
+- Python ≥ 3.10
+- Internetverbindung (für PVGIS- und Geocoding-Abfragen)
+
+## Bedienung
+
+Die Konfiguration erfolgt über die **Seitenleiste** in fünf aufklappbaren Abschnitten:
+
+| Abschnitt | Inhalt |
+|---|---|
+| 📍 **Standort** | Ort suchen oder Koordinaten manuell eingeben |
+| 💡 **Verbrauch** | Jahresverbrauch, Lastprofil, Lastverschiebung, periodische Zusatzlast |
+| ⚡ **PV-System** | PVGIS-Datenjahr, Systemverluste, Wechselrichter-Limit, Einspeisevergütung, Module |
+| 🔋 **Speicher** | DC/AC-Kopplung, Lade-/Entladeverluste, SoC-Grenzen, Speicher-Optionen |
+| 💰 **Preise & Vergleich** | Strompreis, Preissteigerung, ETF-Rendite, Analyse-Horizont |
+
+Nach Eingabe von **Standort** und **Jahresverbrauch** startet die Analyse automatisch.
+
+## Analyse-Ergebnisse
+
+- **Szenario-Übersicht** – Autarkie, Eigenverbrauch, Netzbezug, Einspeisung und Ersparnis pro Szenario
+- **Monatliche Energiebilanz** – Gestapeltes Balkendiagramm (Direkt-PV, Batterie, Netzbezug, Einspeisung)
+- **Inkrementelle Analyse** – Mehrwert jeder Ausbaustufe (Δ kWh, Δ €, Amortisation, Rendite)
+- **Langzeit-Chart** – PV-Netto-Gewinn vs. ETF über den Analyse-Horizont
+- **Zusammenfassung** – Bestes Szenario nach absolutem PV-Gewinn
+
+## Simulationsmodell
+
+Die Simulation läuft stündlich über ein volles Kalenderjahr (8.760 Stunden):
+
+1. **PV-Erzeugung** – PVGIS liefert stündliche DC-Leistung pro Modul
+2. **Haushaltslast** – Tagesprofil (24 Stunden), optional mit Flex- und Periodiklast
+3. **Energiefluss** – Pro Stunde in Abhängigkeit der Speicheranbindung:
+
+   **DC-gekoppelt** (Smart-Inverter-Priorität):
+   1. Haushaltslast aus PV decken (durch Wechselrichter, ≤ WR-Limit)
+   2. Batterie aus überschüssigem DC laden (kein WR-Limit)
+   3. Rest über Wechselrichter ins Netz einspeisen (≤ verbleibende WR-Kapazität)
+   4. Deficit aus Batterie (durch WR) oder Netz
+
+   **AC-gekoppelt**:
+   1. Wechselrichter begrenzt gesamte PV-Leistung
+   2. Haushaltslast decken, Überschuss in Batterie oder Netz
+
+4. **SoC-Management** – Saisonale Min-/Max-Ladezustände (Sommer/Winter)
+
+## Wirtschaftlichkeitsrechnung
+
+- **Ersparnis** = eingesparter Netzbezug × Strompreis + Einspeisung × Einspeisevergütung
+- **Strompreis** steigt jährlich um den konfigurierten Prozentsatz
+- **Einspeisevergütung** bleibt konstant (entspricht deutschem EEG)
+- **ETF-Vergleich** – Gleicher Investitionsbetrag mit konfigurierter Jahresrendite
+
+## Datenquellen
+
+| Dienst | Zweck | Anbieter |
+|---|---|---|
+| [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/) | Stündliche PV-Ertragsdaten | European Commission JRC |
+| [Nominatim](https://nominatim.openstreetmap.org/) | Geocoding (Ortssuche → Koordinaten) | OpenStreetMap |
+
+## Konfiguration teilen
+
+Über den Button **🔗 Link mit aktueller Konfiguration erstellen** werden alle Parameter (inkl. Module, Speicher, Profile) als komprimierter Base64-String in die URL kodiert. Der Link kann geteilt werden – beim Öffnen wird die Konfiguration automatisch wiederhergestellt.
+

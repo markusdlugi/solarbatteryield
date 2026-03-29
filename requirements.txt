@@ -1,0 +1,6 @@
+streamlit>=1.45
+numpy
+pandas
+requests
+altair
+
