@@ -658,15 +658,18 @@ with st.sidebar.expander("💡 Verbrauch"):
 with st.sidebar.expander("⚡ PV-System"):
     _year_options = list(range(2005, 2021))  # PVGIS supports 2005-2020
     st.selectbox("PVGIS-Datenjahr", _year_options,
-                 index=_year_options.index(sv("cfg_year", 2020)), key="cfg_year")
+                 index=_year_options.index(sv("cfg_year", 2015)), key="cfg_year",
+                 help="Das Jahr, welches für die Analyse verwendet werden soll. "
+                      "2015 war ein gutes Durchschnittsjahr.")
     st.slider("WR-Wirkungsgrad (%)", 80, 100, key="cfg_inverter_eff",
               help="Wirkungsgrad des Wechselrichters. Wird auf die AC-Ausgabe angewendet, "
                    "inkl. Batterie-Entladung bei DC-gekoppelten Systemen.",
               **widget_value("cfg_inverter_eff", 96))
-    st.slider("Sonstige PV-Verluste (%)", 0, 20, key="cfg_loss",
+    st.slider("PV System-Verluste (%)", 0, 20, key="cfg_loss",
               help="Verluste durch Kabel, Verschmutzung, Temperatur, Mismatch etc. "
-                   "**Ohne Wechselrichterverluste**, diese werden anhand des Wirkungsgrades (s.o.) berechnet.",
-              **widget_value("cfg_loss", 5))
+                   "**Ohne Wechselrichterverluste**, da diese separat berechnet werden, "
+                   "daher etwas niedriger als PVGIS-Empfehlung von 14%.",
+              **widget_value("cfg_loss", 12))
     st.toggle(
         "⚡ Wechselrichter-Limit", key="cfg_inverter_limit_enabled",
         help="Begrenzt die maximale Einspeiseleistung des Wechselrichters. "
@@ -789,7 +792,7 @@ with st.sidebar.expander("💰 Preise & Vergleich"):
 lat = sv("cfg_lat", None)
 lon = sv("cfg_lon", None)
 data_year = sv("cfg_year", 2020)
-system_loss = sv("cfg_loss", 5)  # Non-inverter losses only (cables, soiling, temperature)
+system_loss = sv("cfg_loss", 12)
 inverter_limit_enabled = sv("cfg_inverter_limit_enabled", True)
 inverter_limit_w = sv("cfg_inverter_limit_w", 800) if inverter_limit_enabled else None
 feed_in_tariff = sv("cfg_feed_in_tariff", 0.0) / 100  # ct → €
@@ -979,8 +982,9 @@ st.dataframe(
     use_container_width=True, hide_index=True,
 )
 
-st.caption(f"📌 Die Ersparnis (€/a) bezieht sich auf das 1. Jahr. Durch steigende Strompreise "
-           f"(+{e_inc * 100:.0f} %/a) ist die tatsächliche Ersparnis in späteren Jahren höher.")
+if e_inc > 0:
+    st.caption(f"📌 Die Ersparnis (€/a) bezieht sich auf das 1. Jahr. Durch steigende Strompreise "
+               f"(+{e_inc * 100:.0f} %/a) ist die tatsächliche Ersparnis in späteren Jahren höher.")
 
 # ─── Monatliche Energiebilanz ───────────────────────────────────
 MONTH_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
@@ -1142,9 +1146,10 @@ if len(results) > 1:
         .map(color_amort, subset=["Amortisation (a)"])
     )
     st.dataframe(styled_incr, use_container_width=True, hide_index=True)
-    st.caption(f"📌 Die Ersparnis (€/a) und Rendite (%/a) beziehen sich auf das 1. Jahr. Durch steigende Strompreise "
-               f"(+{e_inc * 100:.0f} %/a) ist die tatsächliche Ersparnis in späteren Jahren höher. "
-               f"Die Amortisation berücksichtigt dies korrekt.")
+    if e_inc > 0:
+        st.caption(f"📌 Die Ersparnis (€/a) und Rendite (%/a) beziehen sich auf das 1. Jahr. Durch steigende Strompreise "
+                   f"(+{e_inc * 100:.0f} %/a) ist die tatsächliche Ersparnis in späteren Jahren höher. "
+                   f"Die Amortisation berücksichtigt dies korrekt.")
 
 # ─── Langzeit-Chart: PV vs ETF ─────────────────────────────────
 st.header(f"📈 Langzeit-Vergleich: PV vs. ETF ({analysis_years} Jahre)")
