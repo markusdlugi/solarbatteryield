@@ -4,16 +4,17 @@ Handles energy flow simulation with battery storage.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
 
 from models import SimulationParams, MonthlyData, HourlyResult, SimulationResult
-from h0_profile import (
-    get_h0_load, get_day_type, get_season as get_h0_season, 
-    DayType, Season, H0_PROFILES
+from h0_profile import get_h0_load, get_day_type, DayType
+from inverter_efficiency import (
+    get_inverter_efficiency,
+    DEFAULT_INVERTER_EFFICIENCY_CURVE,
 )
 
 
@@ -37,11 +38,21 @@ class SimulationState:
     
     # Derived values set per-hour
     batt_eff: float = 1.0
-    inv_eff: float = 1.0
     inv_cap: float = float('inf')
     min_soc: float = 0.0
     max_soc: float = 0.0
     
+    # Inverter efficiency curve
+    inverter_efficiency_curve: tuple[tuple[int, float], ...] = field(
+        default_factory=lambda: DEFAULT_INVERTER_EFFICIENCY_CURVE
+    )
+    
+    def get_inverter_efficiency(self, power_kw: float) -> float:
+        """
+        Get inverter efficiency for current power level using the efficiency curve.
+        """
+        return get_inverter_efficiency(power_kw, self.inv_cap, self.inverter_efficiency_curve)
+
     def accumulate_result(self, result: HourlyResult) -> None:
         """Add hourly result values to running totals."""
         self.grid_import += result.grid_import
@@ -133,12 +144,15 @@ def _process_hour_dc_coupled(
     DC-coupled: battery on DC bus, inverter limit on AC only.
     Priority: Load -> Battery charge -> Feed-in (limited by inverter)
     """
-    inv_eff = state.inv_eff
     inv_cap = state.inv_cap
     batt_eff = state.batt_eff
     min_soc = state.min_soc
     max_soc = state.max_soc
     soc = state.soc
+    
+    # Get efficiency based on expected power through inverter
+    # For DC-coupled, we estimate based on the DC generation that will go through inverter
+    inv_eff = state.get_inverter_efficiency(min(gen_dc, inv_cap))
     
     # Step 1: Cover load directly from PV (through inverter)
     dc_needed_for_load = min(gen_dc, load / inv_eff, inv_cap / inv_eff)
@@ -198,12 +212,14 @@ def _process_hour_ac_coupled(
     
     AC-coupled: inverter converts all PV to AC first, then battery charges from AC.
     """
-    inv_eff = state.inv_eff
     inv_cap = state.inv_cap
     batt_eff = state.batt_eff
     min_soc = state.min_soc
     max_soc = state.max_soc
     soc = state.soc
+    
+    # Get efficiency based on expected power through inverter
+    inv_eff = state.get_inverter_efficiency(min(gen_dc, inv_cap))
     
     # Step 1: Convert DC to AC (limited by inverter)
     dc_to_inverter = min(gen_dc, inv_cap / inv_eff)
@@ -292,8 +308,8 @@ def simulate(
     state = SimulationState(
         flex_pool=float(params.flex_pool_size),
         batt_eff=1 - params.batt_loss_pct / 100,
-        inv_eff=params.inverter_eff_pct / 100,
         inv_cap=params.inverter_limit_kw if params.inverter_limit_kw is not None else float('inf'),
+        inverter_efficiency_curve=params.inverter_efficiency_curve,
     )
     
     # Select processing function based on coupling type

@@ -10,6 +10,9 @@ Eine interaktive Streamlit-App zur Simulation und Wirtschaftlichkeitsanalyse von
 - **Standortsuche** – Koordinaten per Ortsname via OpenStreetMap Nominatim
 - **Flexible PV-Konfiguration** – Beliebig viele Module mit individueller Leistung, Ausrichtung und Neigung
 - **Wechselrichter-Limit** – 800 W Standard (Balkonkraftwerk), deaktivierbar für größere Anlagen
+- **Lastabhängiger Wechselrichter-Wirkungsgrad** – Realistische Effizienz basierend auf CEC-Daten von 3.000+ Wechselrichtern:
+  - Drei Voreinstellungen: Pessimistisch (P10), Median (P50), Optimistisch (P90)
+  - Optional: Eigene Wirkungsgradkurve für Experten
 - **DC- und AC-gekoppelte Speicher** – Korrekte Simulation beider Anbindungsarten:
   - **DC-gekoppelt**: Batterie lädt direkt vom DC-Bus, Wechselrichter-Limit gilt nur für die AC-Seite
   - **AC-gekoppelt**: Wechselrichter begrenzt den gesamten PV-Ertrag
@@ -91,16 +94,24 @@ Die Simulation läuft stündlich über ein volles Kalenderjahr (8.760 Stunden):
 
 ## Datenquellen
 
-| Dienst                                                                   | Zweck | Anbieter |
-|--------------------------------------------------------------------------|---|---|
-| [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/)                       | Stündliche PV-Ertragsdaten | European Commission JRC |
-| [Nominatim](https://nominatim.openstreetmap.org/)                        | Geocoding (Ortssuche → Koordinaten) | OpenStreetMap |
-| [BDEW H0-Profil](https://www.bdew.de/energie/standardlastprofile-strom/) | Standard-Lastprofil für Haushalte | BDEW |
+| Dienst oder Datenquelle                                                                                          | Zweck | Anbieter                                               |
+|------------------------------------------------------------------------------------------------------------------|---|--------------------------------------------------------|
+| [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/)                                                               | Stündliche PV-Ertragsdaten | European Commission Joint Research Center (JRC)        |
+| [Nominatim](https://nominatim.openstreetmap.org/)                                                                | Geocoding (Ortssuche → Koordinaten) | OpenStreetMap                                          |
+| [BDEW H0-Profil](https://www.bdew.de/energie/standardlastprofile-strom/)                                         | Standard-Lastprofil für Haushalte | Bundesverband der Energie- und Wasserwirtschaft (BDEW) |
+| [CEC Solar Equipment Lists ](https://www.energy.ca.gov/programs-and-topics/programs/solar-equipment-lists) | Lastabhängige Wirkungsgradkurven | California Energy Commission (CEC)                     |
 
 Das BDEW H0-Standardlastprofil stammt aus der offiziellen Veröffentlichung "Repräsentative VDEW-Lastprofile" (1999) des Bundesverbands der Energie- und Wasserwirtschaft. Die 15-Minuten-Werte werden zu stündlichen Mittelwerten aggregiert.
 - **Tagtypen**: Werktag (Mo-Fr), Samstag, Sonn-/Feiertag
 - **Jahreszeiten**: Winter, Frühling, Sommer, Herbst
 - **Feiertage**: Gesetzliche deutsche Feiertage werden automatisch berücksichtigt
+
+Die Wechselrichter-Wirkungsgradkurven basieren auf dem CEC (California Energy Commission) Grid Support Inverter List, der Effizienz­daten von über 3.000 Wechselrichtern enthält. Die App bietet drei Voreinstellungen:
+- **Pessimistisch (P10)**: 10. Perzentil – konservative Schätzung
+- **Median (P50)**: 50. Perzentil – typischer moderner Wechselrichter
+- **Optimistisch (P90)**: 90. Perzentil – Premium-/Hocheffizienz-Geräte
+
+Zusätzlich können Experten eigene Wirkungsgradkurven eingeben.
 
 ## Konfiguration teilen
 
@@ -109,10 +120,4 @@ Das BDEW H0-Standardlastprofil stammt aus der offiziellen Veröffentlichung "Rep
 ## Lizenz
 
 Dieses Projekt steht unter der [MIT License](LICENSE).
-
-### Danksagungen
-
-- **[VDEW/BDEW](https://www.bdew.de/energie/standardlastprofile-strom/)** – Repräsentative Lastprofile für Haushalte
-- **[PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/)** – European Commission Joint Research Centre
-- **[OpenStreetMap](https://www.openstreetmap.org/)** – Nominatim Geocoding Service
 

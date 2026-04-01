@@ -291,7 +291,9 @@ class Report:
         st.dataframe(styled_incr, use_container_width=True, hide_index=True)
         
         if self.e_inc > 0:
-            st.caption(f"📌 Die Ersparnis (€/a) und Rendite (%/a) beziehen sich auf das 1. Jahr.")
+            st.caption(f"📌 Die Ersparnis (€/a) bezieht sich auf das 1. Jahr. Durch steigende Strompreise "
+                       f"(+{self.e_inc * 100:.0f} %/a) ist die tatsächliche Ersparnis in späteren Jahren höher. "
+                       f"Die Amortisation berücksichtigt dies jedoch.")
 
     def _render_longterm_comparison(self) -> None:
         """Render long-term PV vs ETF comparison chart."""

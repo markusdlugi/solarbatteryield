@@ -127,7 +127,8 @@ def get_config() -> SimulationConfig:
         pv_system=PVSystemConfig(
             data_year=sv("cfg_year"),
             system_loss=sv("cfg_loss"),
-            inverter_eff=sv("cfg_inverter_eff"),
+            inverter_efficiency_preset=sv("cfg_inverter_efficiency_preset"),
+            inverter_efficiency_custom=st.session_state.get("_inverter_eff_custom", []),
             inverter_limit_enabled=inverter_limit_enabled,
             inverter_limit_w=sv("cfg_inverter_limit_w"),
             feed_in_tariff=sv("cfg_feed_in_tariff"),

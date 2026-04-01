@@ -263,11 +263,12 @@ def _render_pv_system_section() -> None:
         st.selectbox("PVGIS-Datenjahr", _year_options,
                      index=_year_options.index(sv("cfg_year")), key="cfg_year",
                      help="Das Jahr für die Analyse. 2015 war ein gutes Durchschnittsjahr.")
-        st.slider("WR-Wirkungsgrad (%)", LIMITS.inverter_eff_min, LIMITS.inverter_eff_max, 
-                  key="cfg_inverter_eff",
-                  **widget_value("cfg_inverter_eff"))
         st.slider("PV System-Verluste (%)", LIMITS.loss_min, LIMITS.loss_max, key="cfg_loss",
                   **widget_value("cfg_loss"))
+        
+        # Inverter efficiency curve selection
+        _render_inverter_efficiency_section()
+        
         st.toggle(
             "⚡ Wechselrichter-Limit", key="cfg_inverter_limit_enabled",
             **widget_value("cfg_inverter_limit_enabled"))
@@ -277,14 +278,107 @@ def _render_pv_system_section() -> None:
                 min_value=LIMITS.inverter_limit_w_min,
                 key="cfg_inverter_limit_w",
                 **widget_value("cfg_inverter_limit_w"))
-        st.number_input(
-            "Einspeisevergütung (ct/kWh)", step=0.5, min_value=0.0,
-            format="%.1f", key="cfg_feed_in_tariff",
-            **widget_value("cfg_feed_in_tariff"))
         st.number_input("Kosten PV-System ohne Speicher (€)", step=50, key="cfg_base_cost",
                         **widget_value("cfg_base_cost"))
         st.divider()
         _render_modules_config()
+
+
+def _render_inverter_efficiency_section() -> None:
+    """Render inverter efficiency curve selection and custom curve editor."""
+    from inverter_efficiency import DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT
+    
+    # Efficiency preset options
+    _preset_options = {
+        "pessimistic": "🔻 Pessimistisch (P10)",
+        "median": "📊 Durchschnittlich (P50)",
+        "optimistic": "🔺 Optimistisch (P90)",
+        "custom": "⚙️ Benutzerdefiniert",
+    }
+    
+    # Initialize preset if not in session state
+    if "cfg_inverter_efficiency_preset" not in st.session_state:
+        st.session_state.cfg_inverter_efficiency_preset = "median"
+    
+    current_preset = sv("cfg_inverter_efficiency_preset")
+    preset_index = list(_preset_options.keys()).index(current_preset) if current_preset in _preset_options else 1
+    
+    st.selectbox(
+        "📈 WR-Wirkungsgradkurve",
+        options=list(_preset_options.keys()),
+        format_func=lambda x: _preset_options[x],
+        index=preset_index,
+        key="cfg_inverter_efficiency_preset",
+        help="Wirkungsgrad des Wechselrichters variiert mit der Leistung. "
+             "Basierend auf CEC-Daten (California Energy Commission) von ~3.000 Wechselrichtern. "
+             "P10 = 10. Perzentil (konservativ), P50 = Median (typisch), P90 = 90. Perzentil (Premium-Geräte).",
+    )
+    
+    # Show custom curve editor if custom is selected
+    if sv("cfg_inverter_efficiency_preset") == "custom":
+        _render_custom_efficiency_editor()
+    else:
+        # Show the current curve values as info
+        _show_efficiency_curve_info(sv("cfg_inverter_efficiency_preset"))
+
+
+def _render_custom_efficiency_editor() -> None:
+    """Render the custom efficiency curve editor."""
+    from inverter_efficiency import DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT
+    
+    # Initialize custom values if not present
+    if "_inverter_eff_custom" not in st.session_state:
+        st.session_state._inverter_eff_custom = list(DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT)
+    
+    st.caption("Wirkungsgrad (%) bei verschiedenen Leistungsstufen")
+    
+    power_levels = [10, 20, 30, 50, 75, 100]
+    
+    # Create a dataframe for editing
+    eff_df = pd.DataFrame({
+        "Leistung (%)": [f"{p}%" for p in power_levels],
+        "Wirkungsgrad (%)": st.session_state._inverter_eff_custom,
+    })
+    
+    edited_eff = st.data_editor(
+        eff_df,
+        disabled=["Leistung (%)"],
+        hide_index=True,
+        use_container_width=True,
+        key="inverter_eff_editor",
+        column_config={
+            "Wirkungsgrad (%)": st.column_config.NumberColumn(
+                min_value=70.0,
+                max_value=100.0,
+                step=0.1,
+                format="%.2f",
+            ),
+        },
+    )
+    
+    new_values = edited_eff["Wirkungsgrad (%)"].tolist()
+    if new_values != st.session_state._inverter_eff_custom:
+        st.session_state._inverter_eff_custom = new_values
+        st.rerun()
+    
+    st.caption("💡 Tipp: CEC-Wechselrichterdaten unter [energy.ca.gov](https://www.energy.ca.gov/programs-and-topics/programs/solar-equipment-lists)")
+
+
+def _show_efficiency_curve_info(preset: str) -> None:
+    """Show information about the selected efficiency curve preset."""
+    from inverter_efficiency import INVERTER_EFFICIENCY_CURVES
+    
+    if preset not in INVERTER_EFFICIENCY_CURVES:
+        return
+    
+    curve = INVERTER_EFFICIENCY_CURVES[preset]
+    
+    # Show a compact summary
+    eff_10 = curve[0][1] * 100
+    eff_50 = curve[3][1] * 100  # 50% power level
+    eff_100 = curve[5][1] * 100
+    
+    st.caption(f"η: {eff_10:.1f}% (10%) → {eff_50:.1f}% (50%) → {eff_100:.1f}% (100%)")
 
 
 def _render_modules_config() -> None:
@@ -386,6 +480,10 @@ def _render_prices_section() -> None:
             "Strompreis-Steigerung (%/a)", step=0.5, format="%.1f", key="cfg_e_inc",
             min_value=LIMITS.e_inc_min, max_value=LIMITS.e_inc_max,
             **widget_value("cfg_e_inc"))
+        st.number_input(
+            "Einspeisevergütung (ct/kWh)", step=0.5, min_value=0.0,
+            format="%.1f", key="cfg_feed_in_tariff",
+            **widget_value("cfg_feed_in_tariff"))
         st.number_input(
             "ETF-Rendite (%/a)", step=0.5, format="%.1f", key="cfg_etf_ret",
             min_value=LIMITS.etf_ret_min, max_value=LIMITS.etf_ret_max,

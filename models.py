@@ -95,12 +95,25 @@ class PVSystemConfig:
     """PV system configuration."""
     data_year: int = 2015
     system_loss: int = 12  # System losses in %
-    inverter_eff: int = 96  # Inverter efficiency in %
     inverter_limit_enabled: bool = True
     inverter_limit_w: int = 800  # Inverter limit in Watts
     feed_in_tariff: float = 0.0  # Feed-in tariff in ct/kWh
     base_cost: int = 800  # Base system cost in EUR
     modules: list[PVModule] = field(default_factory=list)
+    
+    # Inverter efficiency curve selection
+    # Options: "pessimistic", "median", "optimistic", "custom"
+    inverter_efficiency_preset: str = "median"
+    
+    # Custom efficiency curve (used when inverter_efficiency_preset == "custom")
+    # Format: list of efficiency values (0-100%) at power levels [10%, 20%, 30%, 50%, 75%, 100%]
+    inverter_efficiency_custom: list[float] = field(default_factory=list)
+    
+    def __post_init__(self) -> None:
+        """Initialize custom efficiency with P50 defaults if empty."""
+        if not self.inverter_efficiency_custom:
+            from inverter_efficiency import DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT
+            self.inverter_efficiency_custom = list(DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT)
 
 
 @dataclass
@@ -161,7 +174,7 @@ class SimulationParams:
     # Inverter
     data_year: int
     inverter_limit_kw: float | None
-    inverter_eff_pct: float
+    inverter_efficiency_curve: tuple[tuple[int, float], ...]  # Power-dependent efficiency curve
     
     # Consumption profile mode
     profile_mode: str  # "Einfach" or "Erweitert"
@@ -209,7 +222,7 @@ class SimulationParams:
             max_soc_winter_pct=config.storage.max_soc_winter,
             data_year=config.pv_system.data_year,
             inverter_limit_kw=config.inverter_limit_kw,
-            inverter_eff_pct=config.pv_system.inverter_eff,
+            inverter_efficiency_curve=config.get_inverter_efficiency_curve(),
             profile_mode=config.consumption.profile_mode,
             annual_kwh=config.consumption.annual_kwh,
             profile_base=config.consumption.active_base,
@@ -262,6 +275,29 @@ class SimulationConfig:
     def total_peak_kwp(self) -> float:
         """Get total peak power of all modules."""
         return sum(m.peak for m in self.pv_system.modules)
+    
+    def get_inverter_efficiency_curve(self) -> tuple[tuple[int, float], ...]:
+        """
+        Get the inverter efficiency curve based on preset or custom values.
+        
+        Returns a tuple of (power_level_percent, efficiency) pairs.
+        """
+        from inverter_efficiency import INVERTER_EFFICIENCY_CURVES, DEFAULT_INVERTER_EFFICIENCY_CURVE
+        
+        preset = self.pv_system.inverter_efficiency_preset
+        
+        if preset == "custom":
+            # Build curve from custom values
+            power_levels = [10, 20, 30, 50, 75, 100]
+            custom = self.pv_system.inverter_efficiency_custom
+            return tuple(
+                (level, eff / 100) 
+                for level, eff in zip(power_levels, custom)
+            )
+        elif preset in INVERTER_EFFICIENCY_CURVES:
+            return INVERTER_EFFICIENCY_CURVES[preset]
+        else:
+            return DEFAULT_INVERTER_EFFICIENCY_CURVE
     
     def is_valid(self) -> tuple[bool, list[str]]:
         """Check if configuration is valid for simulation."""

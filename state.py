@@ -33,8 +33,12 @@ def encode_config() -> str:
             data["_profile_saturday"] = st.session_state._profile_saturday
         if "_profile_sunday" in st.session_state:
             data["_profile_sunday"] = st.session_state._profile_sunday
+    # Add custom inverter efficiency curve if using custom preset
+    if st.session_state.get("cfg_inverter_efficiency_preset") == "custom":
+        if "_inverter_eff_custom" in st.session_state:
+            data["_inverter_eff_custom"] = st.session_state._inverter_eff_custom
     # Add version for future compatibility
-    data["_version"] = 2
+    data["_version"] = 3
     raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     compressed = zlib.compress(raw, level=9)
     return base64.urlsafe_b64encode(compressed).decode("ascii")
@@ -71,6 +75,9 @@ def decode_config(encoded: str) -> None:
             st.session_state._profile_saturday = data["_profile_saturday"]
         if "_profile_sunday" in data:
             st.session_state._profile_sunday = data["_profile_sunday"]
+    # Restore custom inverter efficiency curve (version 3+)
+    if "_inverter_eff_custom" in data:
+        st.session_state._inverter_eff_custom = data["_inverter_eff_custom"]
 
 
 def init_session_state() -> None:

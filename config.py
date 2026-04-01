@@ -74,10 +74,9 @@ class ConfigDefaults:
     # PV System
     year: int = 2015
     loss: int = 12  # System losses %
-    inverter_eff: int = 96  # Inverter efficiency %
+    inverter_efficiency_preset: str = "median"  # "pessimistic", "median", "optimistic", "custom"
     inverter_limit_enabled: bool = True
     inverter_limit_w: int = 800  # Watts
-    feed_in_tariff: float = 0.0  # ct/kWh
     base_cost: int = 800  # EUR
     
     # Storage
@@ -91,6 +90,7 @@ class ConfigDefaults:
     # Economics
     e_price: float = 0.27  # EUR/kWh
     e_inc: float = 3.0  # % per year
+    feed_in_tariff: float = 0.0  # ct/kWh
     etf_ret: float = 7.0  # % per year
     years: int = 15  # Analysis horizon
 
@@ -99,7 +99,7 @@ class ConfigDefaults:
 DEFAULTS = ConfigDefaults()
 
 
-# ─── Session State Key Mappings ────────────────────────────────
+# ─── Session State Key Mappings ────────────────────────────────────────────────
 # Maps session state keys to their default values from ConfigDefaults
 SESSION_STATE_DEFAULTS: dict[str, Any] = {
     "cfg_lat": DEFAULTS.lat,
@@ -117,10 +117,9 @@ SESSION_STATE_DEFAULTS: dict[str, Any] = {
     "cfg_periodic_days": DEFAULTS.periodic_days,
     "cfg_year": DEFAULTS.year,
     "cfg_loss": DEFAULTS.loss,
-    "cfg_inverter_eff": DEFAULTS.inverter_eff,
+    "cfg_inverter_efficiency_preset": DEFAULTS.inverter_efficiency_preset,
     "cfg_inverter_limit_enabled": DEFAULTS.inverter_limit_enabled,
     "cfg_inverter_limit_w": DEFAULTS.inverter_limit_w,
-    "cfg_feed_in_tariff": DEFAULTS.feed_in_tariff,
     "cfg_base_cost": DEFAULTS.base_cost,
     "cfg_dc_coupled": DEFAULTS.dc_coupled,
     "cfg_batt_loss": DEFAULTS.batt_loss,
@@ -130,6 +129,7 @@ SESSION_STATE_DEFAULTS: dict[str, Any] = {
     "cfg_max_soc_w": DEFAULTS.max_soc_winter,
     "cfg_e_price": DEFAULTS.e_price,
     "cfg_e_inc": DEFAULTS.e_inc,
+    "cfg_feed_in_tariff": DEFAULTS.feed_in_tariff,
     "cfg_etf_ret": DEFAULTS.etf_ret,
     "cfg_years": DEFAULTS.years,
 }
@@ -144,9 +144,9 @@ PERSISTED_KEYS: list[str] = [
     "cfg_periodic_enabled", "cfg_periodic_days",
     "cfg_seasonal_enabled", "cfg_season_winter", "cfg_season_summer",
     "cfg_year", "cfg_loss", "cfg_inverter_limit_enabled", "cfg_inverter_limit_w",
-    "cfg_feed_in_tariff", "cfg_base_cost", "cfg_dc_coupled", "cfg_inverter_eff",
+    "cfg_base_cost", "cfg_dc_coupled", "cfg_inverter_efficiency_preset",
     "cfg_batt_loss", "cfg_min_soc_s", "cfg_max_soc_s", "cfg_min_soc_w", "cfg_max_soc_w",
-    "cfg_e_price", "cfg_e_inc", "cfg_etf_ret", "cfg_years",
+    "cfg_e_price", "cfg_e_inc", "cfg_feed_in_tariff", "cfg_etf_ret", "cfg_years",
 ]
 
 
