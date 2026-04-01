@@ -2,7 +2,5 @@
 # Hide the "Deploy" button and hamburger menu in Streamlit Cloud
 toolbarMode = "minimal"
 
-[server]
-# Disable file watcher for production
-fileWatcherType = "none"
+
 

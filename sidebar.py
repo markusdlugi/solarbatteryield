@@ -78,8 +78,8 @@ def _render_consumption_section() -> None:
             "Lastprofil-Modus", _profile_modes, horizontal=True,
             index=_profile_modes.index(sv("cfg_profile_mode")),
             key="cfg_profile_mode",
-            help="**Einfach**: Standard-Lastprofil skaliert auf Jahresverbrauch. "
-                 "**Erweitert**: Eigenes stündliches Lastprofil.",
+            help="**Einfach**: BDEW H0-Standardlastprofil mit Unterscheidung nach Wochentag/Samstag/Sonntag. "
+                 "**Erweitert**: Eigenes stündliches Lastprofil mit optionaler Saisonskalierung.",
         )
         
         if sv("cfg_profile_mode") == "Einfach":
@@ -88,34 +88,106 @@ def _render_consumption_section() -> None:
                 min_value=LIMITS.annual_kwh_min, key="cfg_annual_kwh",
                 placeholder="z. B. 3000",
             )
-            annual_kwh = sv("cfg_annual_kwh")
-            if annual_kwh is not None:
-                scale = annual_kwh / DEFAULT_ANNUAL_KWH
-                st.session_state._active_base = [round(w * scale) for w in PROFILE_BASE]
+            st.caption("📊 Das BDEW H0-Standardlastprofil berücksichtigt automatisch "
+                      "unterschiedliche Verbräuche an Werktagen, Samstagen und Sonn-/Feiertagen "
+                      "sowie saisonale Unterschiede.")
         else:
-            st.caption("Verbrauch in Watt für jede Stunde eines typischen Tages")
+            _render_advanced_profile_settings()
+            _render_seasonal_settings()
+
+        _render_flex_load_settings()
+        _render_periodic_load_settings()
+
+
+def _render_advanced_profile_settings() -> None:
+    """Render advanced profile settings with optional day-type differentiation."""
+    st.caption("Verbrauch in Watt für jede Stunde eines typischen Tages")
+    
+    # Check if day-type profiles are enabled
+    use_day_types = st.toggle(
+        "📅 Tagtyp-Differenzierung", 
+        key="cfg_use_day_types",
+        help="Separate Profile für Werktage, Samstage und Sonn-/Feiertage",
+        **widget_value("cfg_use_day_types", False),
+    )
+    
+    if use_day_types:
+        # Three separate editors for weekday, Saturday, Sunday
+        tabs = st.tabs(["Mo-Fr", "Sa", "So/Feiertag"])
+        
+        with tabs[0]:
+            st.caption("Werktage (Mo-Fr)")
             profile_df = pd.DataFrame({
                 "Stunde": [f"{h:02d}:00" for h in range(24)],
                 "Verbrauch (W)": st.session_state._active_base,
             })
             edited_df = st.data_editor(
                 profile_df, disabled=["Stunde"], hide_index=True,
-                use_container_width=True, key="profile_editor",
+                use_container_width=True, key="profile_editor_weekday",
             )
             new_values = edited_df["Verbrauch (W)"].tolist()
             if new_values != st.session_state._active_base:
                 st.session_state._active_base = new_values
                 st.rerun()
+        
+        with tabs[1]:
+            st.caption("Samstag")
+            # Initialize Saturday profile if not exists
+            if "_profile_saturday" not in st.session_state:
+                st.session_state._profile_saturday = list(st.session_state._active_base)
+            profile_sat_df = pd.DataFrame({
+                "Stunde": [f"{h:02d}:00" for h in range(24)],
+                "Verbrauch (W)": st.session_state._profile_saturday,
+            })
+            edited_sat_df = st.data_editor(
+                profile_sat_df, disabled=["Stunde"], hide_index=True,
+                use_container_width=True, key="profile_editor_saturday",
+            )
+            new_sat_values = edited_sat_df["Verbrauch (W)"].tolist()
+            if new_sat_values != st.session_state._profile_saturday:
+                st.session_state._profile_saturday = new_sat_values
+                st.rerun()
+        
+        with tabs[2]:
+            st.caption("Sonn- und Feiertage")
+            # Initialize Sunday profile if not exists
+            if "_profile_sunday" not in st.session_state:
+                st.session_state._profile_sunday = list(st.session_state._active_base)
+            profile_sun_df = pd.DataFrame({
+                "Stunde": [f"{h:02d}:00" for h in range(24)],
+                "Verbrauch (W)": st.session_state._profile_sunday,
+            })
+            edited_sun_df = st.data_editor(
+                profile_sun_df, disabled=["Stunde"], hide_index=True,
+                use_container_width=True, key="profile_editor_sunday",
+            )
+            new_sun_values = edited_sun_df["Verbrauch (W)"].tolist()
+            if new_sun_values != st.session_state._profile_sunday:
+                st.session_state._profile_sunday = new_sun_values
+                st.rerun()
+    else:
+        # Single profile for all days
+        profile_df = pd.DataFrame({
+            "Stunde": [f"{h:02d}:00" for h in range(24)],
+            "Verbrauch (W)": st.session_state._active_base,
+        })
+        edited_df = st.data_editor(
+            profile_df, disabled=["Stunde"], hide_index=True,
+            use_container_width=True, key="profile_editor",
+        )
+        new_values = edited_df["Verbrauch (W)"].tolist()
+        if new_values != st.session_state._active_base:
+            st.session_state._active_base = new_values
+            st.rerun()
 
-        _render_seasonal_settings()
-        _render_flex_load_settings()
-        _render_periodic_load_settings()
 
 
 def _render_seasonal_settings() -> None:
-    """Render seasonal scaling settings."""
+    """Render seasonal scaling settings (only for advanced mode)."""
     st.toggle("❄️ Saisonale Skalierung", key="cfg_seasonal_enabled",
-        help="Verbrauch im Winter höher, im Sommer niedriger.",
+        help="Verbrauch im Winter höher, im Sommer niedriger. "
+             "Das H0-Profil (Einfach-Modus) enthält bereits saisonale Unterschiede. "
+             "Die Voreinstellungen ahmen die Skalierung des H0-Profils nach.",
         **widget_value("cfg_seasonal_enabled"))
     if sv("cfg_seasonal_enabled"):
         st.slider("Winter-Faktor (%)", 100, 130, key="cfg_season_winter",

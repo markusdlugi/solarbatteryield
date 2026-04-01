@@ -13,7 +13,11 @@ Eine interaktive Streamlit-App zur Simulation und Wirtschaftlichkeitsanalyse von
 - **DC- und AC-gekoppelte Speicher** – Korrekte Simulation beider Anbindungsarten:
   - **DC-gekoppelt**: Batterie lädt direkt vom DC-Bus, Wechselrichter-Limit gilt nur für die AC-Seite
   - **AC-gekoppelt**: Wechselrichter begrenzt den gesamten PV-Ertrag
-- **Verbrauchsprofil** – Einfacher Modus (Jahresverbrauch → skaliertes Tagesprofil) oder stündliche Eingabe
+- **BDEW H0-Standardlastprofil** – Realistisches Lastprofil mit Unterscheidung nach:
+  - Werktagen, Samstagen und Sonn-/Feiertagen
+  - Jahreszeiten (Winter, Frühling, Sommer, Herbst)
+  - Deutsche Feiertage werden automatisch berücksichtigt
+- **Erweiterter Verbrauchsmodus** – Eigene stündliche Lastprofile mit optionaler Tagtyp-Differenzierung
 - **Lastverschiebung** – Optionale Zusatzlast an ertragreichen Sonnentagen (z. B. Waschmaschine)
 - **Periodische Zusatzlast** – Regelmäßiger Verbrauch unabhängig vom Wetter (z. B. Warmwasser)
 - **Einspeisevergütung** – Berücksichtigung der Vergütung in allen Wirtschaftlichkeitsberechnungen
@@ -60,7 +64,10 @@ Nach Eingabe von **Standort** und **Jahresverbrauch** startet die Analyse automa
 Die Simulation läuft stündlich über ein volles Kalenderjahr (8.760 Stunden):
 
 1. **PV-Erzeugung** – PVGIS liefert stündliche DC-Leistung pro Modul
-2. **Haushaltslast** – Tagesprofil (24 Stunden), optional mit Flex- und Periodiklast
+2. **Haushaltslast** – BDEW H0-Profil mit automatischer Unterscheidung nach:
+   - **Tagtyp**: Werktag / Samstag / Sonn- und Feiertag
+   - **Jahreszeit**: Winter / Frühling / Sommer / Herbst
+   - Optional mit Flex- und Periodiklast
 3. **Energiefluss** – Pro Stunde in Abhängigkeit der Speicheranbindung:
 
    **DC-gekoppelt** (Smart-Inverter-Priorität):
@@ -84,12 +91,28 @@ Die Simulation läuft stündlich über ein volles Kalenderjahr (8.760 Stunden):
 
 ## Datenquellen
 
-| Dienst | Zweck | Anbieter |
-|---|---|---|
-| [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/) | Stündliche PV-Ertragsdaten | European Commission JRC |
-| [Nominatim](https://nominatim.openstreetmap.org/) | Geocoding (Ortssuche → Koordinaten) | OpenStreetMap |
+| Dienst                                                                   | Zweck | Anbieter |
+|--------------------------------------------------------------------------|---|---|
+| [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/)                       | Stündliche PV-Ertragsdaten | European Commission JRC |
+| [Nominatim](https://nominatim.openstreetmap.org/)                        | Geocoding (Ortssuche → Koordinaten) | OpenStreetMap |
+| [BDEW H0-Profil](https://www.bdew.de/energie/standardlastprofile-strom/) | Standard-Lastprofil für Haushalte | BDEW |
+
+Das BDEW H0-Standardlastprofil stammt aus der offiziellen Veröffentlichung "Repräsentative VDEW-Lastprofile" (1999) des Bundesverbands der Energie- und Wasserwirtschaft. Die 15-Minuten-Werte werden zu stündlichen Mittelwerten aggregiert.
+- **Tagtypen**: Werktag (Mo-Fr), Samstag, Sonn-/Feiertag
+- **Jahreszeiten**: Winter, Frühling, Sommer, Herbst
+- **Feiertage**: Gesetzliche deutsche Feiertage werden automatisch berücksichtigt
 
 ## Konfiguration teilen
 
 Über den Button **🔗 Link mit aktueller Konfiguration erstellen** werden alle Parameter (inkl. Module, Speicher, Profile) als komprimierter Base64-String in die URL kodiert. Der Link kann geteilt werden – beim Öffnen wird die Konfiguration automatisch wiederhergestellt.
+
+## Lizenz
+
+Dieses Projekt steht unter der [MIT License](LICENSE).
+
+### Danksagungen
+
+- **[VDEW/BDEW](https://www.bdew.de/energie/standardlastprofile-strom/)** – Repräsentative Lastprofile für Haushalte
+- **[PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/)** – European Commission Joint Research Centre
+- **[OpenStreetMap](https://www.openstreetmap.org/)** – Nominatim Geocoding Service
 

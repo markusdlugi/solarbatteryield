@@ -93,6 +93,14 @@ def get_config() -> SimulationConfig:
         for s in st.session_state.storages
     ]
     
+    # Get day-type profiles if enabled
+    use_day_types = st.session_state.get("cfg_use_day_types", False)
+    profile_saturday = None
+    profile_sunday = None
+    if use_day_types and sv("cfg_profile_mode") == "Erweitert":
+        profile_saturday = st.session_state.get("_profile_saturday")
+        profile_sunday = st.session_state.get("_profile_sunday")
+    
     return SimulationConfig(
         location=LocationConfig(
             lat=sv("cfg_lat"),
@@ -102,6 +110,8 @@ def get_config() -> SimulationConfig:
             profile_mode=sv("cfg_profile_mode"),
             annual_kwh=sv("cfg_annual_kwh"),
             active_base=st.session_state._active_base,
+            profile_saturday=profile_saturday,
+            profile_sunday=profile_sunday,
             seasonal_enabled=sv("cfg_seasonal_enabled"),
             season_winter_pct=sv("cfg_season_winter"),
             season_summer_pct=sv("cfg_season_summer"),

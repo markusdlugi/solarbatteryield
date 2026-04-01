@@ -26,8 +26,15 @@ def encode_config() -> str:
     data["_active_base"] = st.session_state._active_base
     data["_flex_delta"] = st.session_state._flex_delta
     data["_periodic_delta"] = st.session_state._periodic_delta
+    # Add day-type profiles if enabled
+    if st.session_state.get("cfg_use_day_types", False):
+        data["cfg_use_day_types"] = True
+        if "_profile_saturday" in st.session_state:
+            data["_profile_saturday"] = st.session_state._profile_saturday
+        if "_profile_sunday" in st.session_state:
+            data["_profile_sunday"] = st.session_state._profile_sunday
     # Add version for future compatibility
-    data["_version"] = 1
+    data["_version"] = 2
     raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     compressed = zlib.compress(raw, level=9)
     return base64.urlsafe_b64encode(compressed).decode("ascii")
@@ -57,6 +64,13 @@ def decode_config(encoded: str) -> None:
         st.session_state._flex_delta = data["_flex_delta"]
     if "_periodic_delta" in data:
         st.session_state._periodic_delta = data["_periodic_delta"]
+    # Restore day-type profiles (version 2+)
+    if data.get("cfg_use_day_types", False):
+        st.session_state.cfg_use_day_types = True
+        if "_profile_saturday" in data:
+            st.session_state._profile_saturday = data["_profile_saturday"]
+        if "_profile_sunday" in data:
+            st.session_state._profile_sunday = data["_profile_sunday"]
 
 
 def init_session_state() -> None:

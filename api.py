@@ -195,7 +195,7 @@ def get_pvgis_hourly(
         raise PVGISError(f"Unerwartetes Datenformat: {e}")
 
 
-@st.cache_data(show_spinner=False, ttl=86400)
+@st.cache_data(show_spinner=False)
 def geocode(query: str) -> tuple[str, float, float] | None:
     """
     Look up coordinates for a place name via Nominatim.
@@ -243,7 +243,7 @@ def geocode(query: str) -> tuple[str, float, float] | None:
         raise GeocodingError(f"Unerwartetes Datenformat: {e}")
 
 
-@st.cache_data(show_spinner=False, ttl=86400)
+@st.cache_data(show_spinner=False)
 def reverse_geocode(lat: float, lon: float) -> str | None:
     """
     Reverse look-up: return a short place name for coordinates.

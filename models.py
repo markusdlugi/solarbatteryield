@@ -57,9 +57,18 @@ class ConsumptionConfig:
     """Household consumption configuration."""
     profile_mode: str = "Einfach"  # "Einfach" or "Erweitert"
     annual_kwh: float | None = None
+    
+    # Load profiles (in Watts for each hour 0-23)
+    # In simple mode: H0 profile is used, these are ignored
+    # In advanced mode: user provides these profiles
     active_base: list[int] = field(default_factory=lambda: [0] * 24)
     
-    # Seasonal scaling
+    # Optional separate profiles for different day types (advanced mode only)
+    # If None, active_base is used for all days
+    profile_saturday: list[int] | None = None
+    profile_sunday: list[int] | None = None
+    
+    # Seasonal scaling (only used in advanced mode)
     seasonal_enabled: bool = True
     season_winter_pct: int = 114  # Winter factor (%)
     season_summer_pct: int = 87   # Summer factor (%)
@@ -75,6 +84,10 @@ class ConsumptionConfig:
     periodic_enabled: bool = False
     periodic_delta: list[int] = field(default_factory=lambda: [0] * 24)
     periodic_days: int = 3  # Interval in days
+    
+    def has_day_type_profiles(self) -> bool:
+        """Check if separate day-type profiles are provided."""
+        return self.profile_saturday is not None and self.profile_sunday is not None
 
 
 @dataclass
@@ -150,8 +163,16 @@ class SimulationParams:
     inverter_limit_kw: float | None
     inverter_eff_pct: float
     
-    # Consumption profile
+    # Consumption profile mode
+    profile_mode: str  # "Einfach" or "Erweitert"
+    annual_kwh: float | None  # Required for simple mode
+    
+    # Custom consumption profiles (for advanced mode)
     profile_base: list[float]
+    profile_saturday: list[float] | None  # None = use profile_base
+    profile_sunday: list[float] | None    # None = use profile_base
+    
+    # Seasonal scaling (advanced mode only)
     seasonal_enabled: bool
     season_winter_pct: float
     season_summer_pct: float
@@ -168,6 +189,14 @@ class SimulationParams:
     periodic_delta: list[float]
     periodic_interval_days: int
     
+    def use_h0_profile(self) -> bool:
+        """Check if H0 standard profile should be used."""
+        return self.profile_mode == "Einfach"
+    
+    def has_day_type_profiles(self) -> bool:
+        """Check if separate day-type profiles are provided."""
+        return self.profile_saturday is not None and self.profile_sunday is not None
+    
     @classmethod
     def from_config(cls, config: "SimulationConfig") -> "SimulationParams":
         """Create SimulationParams from a SimulationConfig."""
@@ -181,7 +210,11 @@ class SimulationParams:
             data_year=config.pv_system.data_year,
             inverter_limit_kw=config.inverter_limit_kw,
             inverter_eff_pct=config.pv_system.inverter_eff,
+            profile_mode=config.consumption.profile_mode,
+            annual_kwh=config.consumption.annual_kwh,
             profile_base=config.consumption.active_base,
+            profile_saturday=config.consumption.profile_saturday,
+            profile_sunday=config.consumption.profile_sunday,
             seasonal_enabled=config.consumption.seasonal_enabled,
             season_winter_pct=config.consumption.season_winter_pct,
             season_summer_pct=config.consumption.season_summer_pct,

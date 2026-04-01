@@ -5,11 +5,16 @@ Handles energy flow simulation with battery storage.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
 
 from models import SimulationParams, MonthlyData, HourlyResult, SimulationResult
+from h0_profile import (
+    get_h0_load, get_day_type, get_season as get_h0_season, 
+    DayType, Season, H0_PROFILES
+)
 
 
 # Season definitions - centralized for consistency
@@ -60,21 +65,56 @@ def is_winter_month(month: int) -> bool:
 
 def _calculate_hourly_load(
     hour: int,
-    month: int,
+    current_date: date,
     params: SimulationParams,
     day: int,
     use_flex_today: bool,
-    season_factors: dict[str, float],
 ) -> float:
-    """Calculate the load for a specific hour."""
-    season = get_season(month)
-    season_factor = season_factors[season]
+    """
+    Calculate the load for a specific hour.
     
-    load = params.profile_base[hour] / 1000 * season_factor
+    For simple mode: Uses BDEW H0 standard load profile with day type differentiation
+    For advanced mode: Uses user-provided profiles with optional seasonal scaling
+    """
+    month = current_date.month
     
+    if params.use_h0_profile():
+        # Simple mode: Use H0 profile
+        # get_h0_load returns kWh directly
+        load = get_h0_load(hour, current_date, params.annual_kwh)
+    else:
+        # Advanced mode: Use user-provided profiles
+        day_type = get_day_type(current_date)
+        
+        # Select appropriate profile based on day type
+        if params.has_day_type_profiles():
+            if day_type == DayType.SATURDAY:
+                profile = params.profile_saturday
+            elif day_type == DayType.SUNDAY:
+                profile = params.profile_sunday
+            else:
+                profile = params.profile_base
+        else:
+            profile = params.profile_base
+        
+        # Get base load from profile (convert W to kWh)
+        load = profile[hour] / 1000
+        
+        # Apply seasonal scaling (only in advanced mode)
+        if params.seasonal_enabled:
+            season = get_season(month)
+            season_factors = {
+                "winter": params.season_winter_pct / 100,
+                "summer": params.season_summer_pct / 100,
+                "transition": 1.0,
+            }
+            load *= season_factors[season]
+    
+    # Add flexible load if applicable
     if use_flex_today:
         load += params.flex_delta[hour] / 1000
     
+    # Add periodic load if applicable
     if params.periodic_load_enabled and day % params.periodic_interval_days == 0:
         load += params.periodic_delta[hour] / 1000
     
@@ -256,29 +296,27 @@ def simulate(
         inv_cap=params.inverter_limit_kw if params.inverter_limit_kw is not None else float('inf'),
     )
     
-    # Build seasonal factors
-    season_factors = {
-        "winter": params.season_winter_pct / 100 if params.seasonal_enabled else 1.0,
-        "summer": params.season_summer_pct / 100 if params.seasonal_enabled else 1.0,
-        "transition": 1.0,
-    }
-    
     # Select processing function based on coupling type
     process_hour = _process_hour_dc_coupled if params.dc_coupled else _process_hour_ac_coupled
     
     # Monthly tracking
     monthly: dict[int, MonthlyData] = {m: MonthlyData() for m in range(1, 13)}
     
+    # Start date for the simulation year
+    start_date = date(params.data_year, 1, 1)
+    
     for i in range(hours):
         hour = i % 24
         day = i // 24
         
+        # Calculate current date
+        current_date = start_date + timedelta(days=day)
+        month = current_date.month
+        
         # Update flex pool at start of day
         _update_flex_pool(hour, day, pv_raw, i, state, params)
         
-        # Determine month and SoC limits
-        month = pd.to_datetime(i, unit="h", origin=pd.Timestamp(f"{params.data_year}-01-01")).month
-        
+        # Set SoC limits based on season
         if is_winter_month(month):
             state.min_soc = cap_gross * params.min_soc_winter_pct / 100
             state.max_soc = cap_gross * params.max_soc_winter_pct / 100
@@ -286,9 +324,9 @@ def simulate(
             state.min_soc = cap_gross * params.min_soc_summer_pct / 100
             state.max_soc = cap_gross * params.max_soc_summer_pct / 100
         
-        # Calculate load for this hour
+        # Calculate load for this hour (handles both H0 and custom profiles)
         load = _calculate_hourly_load(
-            hour, month, params, day, state.use_flex_today, season_factors
+            hour, current_date, params, day, state.use_flex_today
         )
         
         gen_dc = pv_raw[i]
