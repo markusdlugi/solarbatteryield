@@ -85,6 +85,14 @@ Die Simulation läuft stündlich über ein volles Kalenderjahr (8.760 Stunden):
 
 4. **SoC-Management** – Saisonale Min-/Max-Ladezustände (Sommer/Winter)
 
+### Sub-stündliche Lastregressionskorrektur
+
+Ein naiver stündlicher Vergleich von PV-Erzeugung und Haushaltslast überschätzt den Eigenverbrauch: Liegt die mittlere Stundenlast z. B. bei 300 W und die PV bei 400 W, scheint die Last vollständig gedeckt. In Wirklichkeit schwankt der Verbrauch innerhalb der Stunde erheblich – zeitweise deutlich unter und zeitweise über der PV-Leistung. Gerade bei Balkonkraftwerken mit niedrigem Wechselrichter-Limit (z. B. 800 W) führt das zu spürbaren Abweichungen.
+
+Um dies zu korrigieren, wird für jede Simulationsstunde der durchschnittliche Verbrauch in eine **Wahrscheinlichkeitsdichtefunktion** (PDF) der momentanen Leistungsaufnahme überführt (50-W-Bins, 0–4.950 W). Für jedes Leistungsintervall wird der Anteil der PV-Erzeugung berechnet, der die momentane Last decken kann. Die gewichtete Summe über alle Intervalle ergibt den realistischen Direkt-PV-Anteil. Dadurch können innerhalb einer Stunde sowohl Überschuss (Einspeisung / Batterieladung) als auch Defizit (Netzbezug / Batterieentladung) gleichzeitig auftreten.
+
+Die vorberechneten Verteilungen (0–3.450 W) stammen aus gemessenen Sekundenlastprofilen von 38 deutschen Einfamilienhäusern. Für höhere Lasten wird eine synthetische bimodale Gaußverteilung erzeugt.
+
 ## Wirtschaftlichkeitsrechnung
 
 - **Ersparnis** = eingesparter Netzbezug × Strompreis + Einspeisung × Einspeisevergütung
@@ -103,7 +111,9 @@ Die Simulation läuft stündlich über ein volles Kalenderjahr (8.760 Stunden):
 | [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/)                                                               | Stündliche PV-Ertragsdaten | European Commission Joint Research Center (JRC)        |
 | [Nominatim](https://nominatim.openstreetmap.org/)                                                                | Geocoding (Ortssuche → Koordinaten) | OpenStreetMap                                          |
 | [BDEW H0-Profil](https://www.bdew.de/energie/standardlastprofile-strom/)                                         | Standard-Lastprofil für Haushalte | Bundesverband der Energie- und Wasserwirtschaft (BDEW) |
-| [CEC Solar Equipment Lists ](https://www.energy.ca.gov/programs-and-topics/programs/solar-equipment-lists) | Lastabhängige Wirkungsgradkurven | California Energy Commission (CEC)                     |
+| [CEC Solar Equipment Lists](https://www.energy.ca.gov/programs-and-topics/programs/solar-equipment-lists)         | Lastabhängige Wirkungsgradkurven | California Energy Commission (CEC)                     |
+| [PVTools](https://github.com/nick81nrw/PVTools) (MIT License)                                                    | Sub-stündliche Lastregressionsverteilungen | nick81nrw                                                |
+| [Tjaden et al. 2023](https://doi.org/10.1038/s41597-022-01156-1)                                                 | Gemessene Sekundenlastprofile (38 Haushalte) | HTW Berlin / *Scientific Data*                        |
 
 Das BDEW H0-Standardlastprofil stammt aus der offiziellen Veröffentlichung "Repräsentative VDEW-Lastprofile" (1999) des Bundesverbands der Energie- und Wasserwirtschaft. Die 15-Minuten-Werte werden zu stündlichen Mittelwerten aggregiert.
 - **Tagtypen**: Werktag (Mo-Fr), Samstag, Sonn-/Feiertag
@@ -116,6 +126,8 @@ Die Wechselrichter-Wirkungsgradkurven basieren auf dem CEC (California Energy Co
 - **Optimistisch (P90)**: 90. Perzentil – Premium-/Hocheffizienz-Geräte
 
 Zusätzlich können Experten eigene Wirkungsgradkurven eingeben.
+
+Die sub-stündlichen Lastregressionsverteilungen basieren auf dem Datensatz von Tjaden, T., Bergner, J., Weniger, J. & Quaschning, V.: *"Representative electrical load profiles of residential buildings in Germany with a temporal resolution of one second"*, Scientific Data 10, 104 (2023), [DOI: 10.1038/s41597-022-01156-1](https://doi.org/10.1038/s41597-022-01156-1). Die Aufbereitung als Wahrscheinlichkeitsdichtefunktionen in 50-W-Bins wurde vom Projekt [PVTools](https://github.com/nick81nrw/PVTools) (MIT License, Copyright © 2023 nick81nrw) durchgeführt und als `regression.json` veröffentlicht.
 
 ## Lizenz
 

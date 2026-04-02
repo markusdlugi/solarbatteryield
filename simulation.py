@@ -15,6 +15,7 @@ from inverter_efficiency import (
     get_inverter_efficiency,
     DEFAULT_INVERTER_EFFICIENCY_CURVE,
 )
+from load_regression import get_direct_pv_fraction
 
 
 
@@ -135,19 +136,27 @@ def _process_hour_dc_coupled(
     # For DC-coupled, we estimate based on the DC generation that will go through inverter
     inv_eff = state.get_inverter_efficiency(min(gen_dc, inv_cap))
     
-    # Step 1: Cover load directly from PV (through inverter)
-    dc_needed_for_load = min(gen_dc, load / inv_eff, inv_cap / inv_eff)
-    pv_to_load_ac = dc_needed_for_load * inv_eff
+    # Step 1: Determine maximum AC available from PV for load coverage
+    max_dc_for_load = min(gen_dc, load / inv_eff, inv_cap / inv_eff)
+    max_pv_to_load_ac = max_dc_for_load * inv_eff
+    
+    # Apply sub-hourly load regression to get realistic direct-PV fraction.
+    # Within the hour the load varies, so not all of min(load, pv_ac) is
+    # actually self-consumed — some moments the load drops below PV and
+    # the surplus cannot be absorbed as "direct PV".
+    fraction = get_direct_pv_fraction(load * 1000, max_pv_to_load_ac * 1000)
+    pv_to_load_ac = fraction * min(load, max_pv_to_load_ac)
+    actual_dc_for_load = pv_to_load_ac / inv_eff if inv_eff > 0 else 0.0
     load_deficit = load - pv_to_load_ac
     
     # Step 2: Charge battery from remaining DC (no inverter limit)
-    dc_remaining = gen_dc - dc_needed_for_load
+    dc_remaining = gen_dc - actual_dc_for_load
     charge = min(dc_remaining, (max_soc - soc) / batt_eff) if cap_gross > 0 else 0
     soc += charge * batt_eff
     dc_after_charge = dc_remaining - charge
     
     # Step 3: Export surplus through inverter (limited by remaining capacity)
-    remaining_inv_dc = max(0, inv_cap / inv_eff - dc_needed_for_load)
+    remaining_inv_dc = max(0, inv_cap / inv_eff - actual_dc_for_load)
     dc_to_export = min(dc_after_charge, remaining_inv_dc)
     export_ac = dc_to_export * inv_eff
     curtailed = dc_after_charge - dc_to_export
@@ -157,7 +166,7 @@ def _process_hour_dc_coupled(
     battery_discharge = 0.0
     
     if load_deficit > 0:
-        inv_headroom_dc = max(0, inv_cap / inv_eff - dc_needed_for_load - dc_to_export)
+        inv_headroom_dc = max(0, inv_cap / inv_eff - actual_dc_for_load - dc_to_export)
         combined_eff = batt_eff * inv_eff
         max_discharge = (
             min(load_deficit / combined_eff, max(0, soc - min_soc), inv_headroom_dc / inv_eff / batt_eff)
@@ -207,27 +216,30 @@ def _process_hour_ac_coupled(
     gen_ac = dc_to_inverter * inv_eff
     curtailed = gen_dc - dc_to_inverter
     
-    net = gen_ac - load
+    # Apply sub-hourly load regression to determine realistic direct-PV usage.
+    # Both surplus and deficit can coexist: during low-load moments PV exceeds
+    # demand (surplus), while during high-load moments demand exceeds PV (deficit).
+    fraction = get_direct_pv_fraction(load * 1000, gen_ac * 1000)
+    direct_pv = fraction * min(load, gen_ac)
     
-    grid_import = 0.0
+    surplus = gen_ac - direct_pv
+    deficit = load - direct_pv
+    
+    # Handle surplus: charge battery, then feed in
     feed_in = 0.0
-    direct_pv = 0.0
-    battery_discharge = 0.0
-    
-    if net > 0:
-        # Surplus: charge battery, then feed in
-        charge = min(net, (max_soc - soc) / batt_eff) if cap_gross > 0 else 0
+    if surplus > 0:
+        charge = min(surplus, (max_soc - soc) / batt_eff) if cap_gross > 0 else 0
         soc += charge * batt_eff
-        feed_in = net - charge
-        direct_pv = load
-    else:
-        # Deficit: discharge battery or import from grid
-        deficit = abs(net)
+        feed_in = surplus - charge
+    
+    # Handle deficit: discharge battery or import from grid
+    grid_import = 0.0
+    battery_discharge = 0.0
+    if deficit > 0:
         discharge = min(deficit / batt_eff, max(0, soc - min_soc)) if cap_gross > 0 else 0
         soc -= discharge
         battery_discharge = discharge * batt_eff
         grid_import = deficit - battery_discharge
-        direct_pv = gen_ac
     
     # Update state
     state.soc = soc
