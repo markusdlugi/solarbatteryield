@@ -5,25 +5,70 @@ All default values are centralized here as a single source of truth.
 from dataclasses import dataclass, field
 from typing import Any
 
+from h0_profile import H0_TRANSITION, get_season, Season
+from datetime import date
+
 
 # ─── Default consumption profiles (Watt per hour 0–23) ─────────
-# BDEW H0 Standardlastprofil (Haushalt), Jahresdurchschnitt über alle Monate,
-# normiert auf ca. 3000 kWh/Jahr (durchschnittlicher deutscher Haushalt).
-PROFILE_BASE: list[int] = [
-    209, 156, 135, 129, 130, 148,     # 00-05: Nacht (Grundlast)
-    239, 335, 388, 416, 425, 445,     # 06-11: Morgen (Frühstück, Arbeitsbeginn)
-    481, 454, 394, 355, 342, 389,     # 12-17: Mittag/Nachmittag
-    475, 537, 504, 444, 390, 298,     # 18-23: Abend (Hauptverbrauchszeit)
-]
-DEFAULT_ANNUAL_KWH: float = sum(PROFILE_BASE) / 1000 * 365  # ≈ 3000 kWh/a
+# Derived from the BDEW H0 transition (Übergangszeit) profile, which serves as
+# the neutral baseline for seasonal scaling (100% factor). Separate profiles for
+# weekday, Saturday, and Sunday/holiday allow day-type differentiation.
+#
+# The scale factor is chosen so that the profile gives ~3000 kWh/year when
+# combined with the default seasonal scaling (Winter 114%, Summer 86%).
+# Winter has more days (140) than summer (123), so without correction the
+# asymmetric scaling would push the total above 3000 kWh.
+def _compute_profile_scale(target_kwh: float = 3000.0, year: int = 2015,
+                           winter_pct: int = 114, summer_pct: int = 86) -> float:
+    """Compute scale factor for transition profile to hit target_kwh with seasonal scaling."""
+    start = date(year, 1, 1)
+    days = 366 if year % 4 == 0 else 365
+    base_kwh_day = sum(H0_TRANSITION.weekday.values) / 1000
+    weighted_days = 0.0
+    for d in range(days):
+        cur = date.fromordinal(start.toordinal() + d)
+        season = get_season(cur.month, cur.day)
+        if season == Season.WINTER:
+            weighted_days += winter_pct / 100
+        elif season == Season.SUMMER:
+            weighted_days += summer_pct / 100
+        else:
+            weighted_days += 1.0
+    return target_kwh / (base_kwh_day * weighted_days)
 
-FLEX_DELTA_DEFAULT: list[int] = [
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 110, 160, 0, 0, 410, 530, 0, 0, 0, 0, 0, 0, 0,
-]
+_PROFILE_SCALE: float = _compute_profile_scale()
 
-PERIODIC_DELTA_DEFAULT: list[int] = [
-    350, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-]
+PROFILE_BASE: list[int] = [round(v * _PROFILE_SCALE) for v in H0_TRANSITION.weekday.values]
+PROFILE_SATURDAY: list[int] = [round(v * _PROFILE_SCALE) for v in H0_TRANSITION.saturday.values]
+PROFILE_SUNDAY: list[int] = [round(v * _PROFILE_SCALE) for v in H0_TRANSITION.sunday.values]
+
+# Reference annual consumption that the default profiles are calibrated for.
+# With default seasonal scaling (114/86), PROFILE_BASE gives exactly this amount.
+TARGET_ANNUAL_KWH: float = 3000.0
+
+DEFAULT_ANNUAL_KWH: float = sum(PROFILE_BASE) / 1000 * 365
+
+
+def scale_profiles(annual_kwh: float) -> tuple[list[int], list[int], list[int]]:
+    """
+    Scale all default profiles to match a target annual consumption.
+
+    The returned profiles will yield approximately `annual_kwh` when used
+    with the default seasonal scaling factors (114% winter, 86% summer).
+
+    Returns:
+        Tuple of (weekday, saturday, sunday) profiles in Watts per hour.
+    """
+    ratio = annual_kwh / TARGET_ANNUAL_KWH
+    return (
+        [round(v * ratio) for v in PROFILE_BASE],
+        [round(v * ratio) for v in PROFILE_SATURDAY],
+        [round(v * ratio) for v in PROFILE_SUNDAY],
+    )
+
+FLEX_DELTA_DEFAULT: list[int] = [0] * 24
+
+PERIODIC_DELTA_DEFAULT: list[int] = [0] * 24
 
 MONTH_LABELS: list[str] = [
     "Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
@@ -58,8 +103,8 @@ class ConfigDefaults:
     profile_mode: str = "Einfach"
     annual_kwh: float | None = None
     seasonal_enabled: bool = True
-    season_winter: int = 114  # Winter factor %
-    season_summer: int = 87   # Summer factor %
+    season_winter: int = 114  # Winter factor % (H0 ideal: 113.85%)
+    season_summer: int = 86   # Summer factor % (H0 ideal: 85.54%)
     
     # Flexible load
     flex_enabled: bool = False

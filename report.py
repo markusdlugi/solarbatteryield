@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from api import reverse_geocode
-from config import MONTH_LABELS
+from config import MONTH_LABELS, COLORS
 from models import SimulationConfig, AnalysisResult, ScenarioResult
 from utils import (
     de, de_styler, color_pos_neg, color_amort, color_rendite,
@@ -72,15 +72,6 @@ class Report:
         place_name = reverse_geocode(self.config.lat, self.config.lon)
         location_str = f"{place_name} ({self.config.lat}°N / {self.config.lon}°E)" if place_name else f"{self.config.lat}°N / {self.config.lon}°E"
         st.caption(f"PVGIS-Stundenwerte {self.config.pv_system.data_year}  ·  Standort {location_str}")
-
-        subtitle_parts = []
-        if self.config.pv_system.inverter_limit_enabled:
-            coupling = "DC" if self.config.storage.dc_coupled else "AC"
-            subtitle_parts.append(f"WR-Limit {self.config.pv_system.inverter_limit_w} W ({coupling}-gekoppelt)")
-        if self.feed_in_tariff > 0:
-            subtitle_parts.append(f"Einspeisevergütung {de(self.feed_in_tariff * 100, 1)} ct/kWh")
-        if subtitle_parts:
-            st.caption(" · ".join(subtitle_parts))
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Gesamtverbrauch", f"{de(self.total_consumption)} kWh/a")
@@ -183,7 +174,7 @@ class Report:
                     "Quelle:N",
                     scale=alt.Scale(
                         domain=["Direkt-PV", "Batterie", "Netzbezug", "Einspeisung"],
-                        range=["#ff9800", "#4db68a", "#488fc2", "#a280db"],
+                        range=[COLORS.direct_pv, COLORS.battery, COLORS.grid_import, COLORS.feed_in],
                     ),
                     title="Quelle",
                 ),
@@ -213,7 +204,7 @@ class Report:
         ])
         line = (
             alt.Chart(cons_df)
-            .mark_line(color="#78909c", strokeWidth=2, strokeDash=[6, 3])
+            .mark_line(color=COLORS.consumption_line, strokeWidth=2, strokeDash=[6, 3])
             .encode(
                 x=alt.X("Monat:N", sort=MONTH_LABELS),
                 y=alt.Y("Verbrauch:Q"),
@@ -225,7 +216,7 @@ class Report:
         )
         points = (
             alt.Chart(cons_df)
-            .mark_point(color="#78909c", size=30, filled=True)
+            .mark_point(color=COLORS.consumption_line, size=30, filled=True)
             .encode(
                 x=alt.X("Monat:N", sort=MONTH_LABELS),
                 y=alt.Y("Verbrauch:Q"),
@@ -466,7 +457,12 @@ def render_missing_config_message(missing: list[str]) -> None:
     for m in missing:
         st.markdown(f"- {m}")
 
-    st.markdown("Nach Hinzufügen der erforderlichen Parameter wird ein Report mit Standardwerten generiert.")
+    st.markdown("Nach Hinzufügen der erforderlichen Parameter wird ein Report mit Standardwerten generiert. "
+                "Er verwendet ein beispielhaftes System, bestehend aus:")
+    st.markdown("- ☀️ PV-Module mit 2kWp Leistung in Südausrichtung")
+    st.markdown("- 🔋️ drei unterschiedliche Speicherkonfigurationen mit bis zu 6kWh")
+    st.markdown("Du kannst diese erweitern, ändern, löschen oder zusätzliche Einstellungen anpassen - "
+                "der Report wird automatisch aktualisiert.")
     st.divider()
     st.caption(
         "💡 Tipp: Öffne die Abschnitte in der Seitenleiste links, um Standort und "

@@ -5,8 +5,12 @@ Contains all configuration widgets and input controls.
 import pandas as pd
 import streamlit as st
 
-from config import PROFILE_BASE, DEFAULT_ANNUAL_KWH, DEFAULTS, LIMITS
+from config import PROFILE_SATURDAY, PROFILE_SUNDAY, DEFAULTS, LIMITS, scale_profiles
 from api import geocode, reverse_geocode, GeocodingError
+from inverter_efficiency import (
+    DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT,
+    INVERTER_EFFICIENCY_CURVES,
+)
 from state import sv, widget_value
 
 
@@ -82,7 +86,17 @@ def _render_consumption_section() -> None:
                  "**Erweitert**: Eigenes stündliches Lastprofil mit optionaler Saisonskalierung.",
         )
         
-        if sv("cfg_profile_mode") == "Einfach":
+        # Detect switch from Einfach → Erweitert: pre-fill profiles from annual kWh
+        current_mode = sv("cfg_profile_mode")
+        if current_mode == "Erweitert" and st.session_state.get("_prev_profile_mode") == "Einfach":
+            annual = sv("cfg_annual_kwh") or 3000.0
+            base, sat, sun = scale_profiles(annual)
+            st.session_state._active_base = base
+            st.session_state._profile_saturday = sat
+            st.session_state._profile_sunday = sun
+        st.session_state._prev_profile_mode = current_mode
+        
+        if current_mode == "Einfach":
             st.number_input(
                 "Jahresverbrauch (kWh)", value=sv("cfg_annual_kwh"), step=100,
                 min_value=LIMITS.annual_kwh_min, key="cfg_annual_kwh",
@@ -134,7 +148,7 @@ def _render_advanced_profile_settings() -> None:
             st.caption("Samstag")
             # Initialize Saturday profile if not exists
             if "_profile_saturday" not in st.session_state:
-                st.session_state._profile_saturday = list(st.session_state._active_base)
+                st.session_state._profile_saturday = list(PROFILE_SATURDAY)
             profile_sat_df = pd.DataFrame({
                 "Stunde": [f"{h:02d}:00" for h in range(24)],
                 "Verbrauch (W)": st.session_state._profile_saturday,
@@ -152,7 +166,7 @@ def _render_advanced_profile_settings() -> None:
             st.caption("Sonn- und Feiertage")
             # Initialize Sunday profile if not exists
             if "_profile_sunday" not in st.session_state:
-                st.session_state._profile_sunday = list(st.session_state._active_base)
+                st.session_state._profile_sunday = list(PROFILE_SUNDAY)
             profile_sun_df = pd.DataFrame({
                 "Stunde": [f"{h:02d}:00" for h in range(24)],
                 "Verbrauch (W)": st.session_state._profile_sunday,
@@ -201,7 +215,8 @@ def _render_flex_load_settings() -> None:
     """Render flexible load shifting settings."""
     st.toggle(
         "☀️ Lastverschiebung an Sonnentagen", key="cfg_flex_enabled",
-        help="Zusätzlicher Verbrauch nur an ertragreichen Tagen.",
+        help="Zusätzlicher Verbrauch **nur an ertragreichen Tagen** (z. B. Waschmaschine). "
+             "Wird nur ausgelöst, wenn genug PV-Ertrag erwartet wird.",
         **widget_value("cfg_flex_enabled"))
     if sv("cfg_flex_enabled"):
         st.caption("Zusätzliche Last pro Stunde an Sonnentagen (Watt)")
@@ -224,10 +239,15 @@ def _render_flex_load_settings() -> None:
         st.number_input(
             "Max. Einsätze im Vorrat", step=1, min_value=1,
             key="cfg_flex_pool",
+            help="Wird aufgefüllt wenn nicht ausgelöst, max. dieses Limit. "
+                 "Beispiel Waschmaschine: wie viele Maschinen max. hintereinander, bis keine Wäsche mehr da ist?",
             **widget_value("cfg_flex_pool"))
         st.number_input(
             "Auffrischungsrate (pro Tag)", step=0.1, min_value=0.0,
             format="%.1f", key="cfg_flex_refresh",
+            help="Einsätze die pro Nicht-Flex-Tag zum Vorrat hinzugefügt werden. "
+                 "Beispiel Waschmaschine: wie lange dauert es, bis ein neuer Waschgang durchgeführt werden kann "
+                 "(bei 0,5 also 2 Tage)?",
             **widget_value("cfg_flex_refresh"))
 
 
@@ -235,7 +255,9 @@ def _render_periodic_load_settings() -> None:
     """Render periodic load settings."""
     st.toggle(
         "🔄 Periodische Zusatzlast", key="cfg_periodic_enabled",
-        help="Regelmäßiger Zusatzverbrauch unabhängig vom Wetter.",
+        help="Regelmäßiger Zusatzverbrauch **unabhängig vom Wetter** "
+             "(z. B. 🌡️ Warmwasser-Desinfektion). "
+             "Wird in festen Intervallen ausgelöst.",
         **widget_value("cfg_periodic_enabled"))
     if sv("cfg_periodic_enabled"):
         st.number_input(
@@ -264,6 +286,9 @@ def _render_pv_system_section() -> None:
                      index=_year_options.index(sv("cfg_year")), key="cfg_year",
                      help="Das Jahr für die Analyse. 2015 war ein gutes Durchschnittsjahr.")
         st.slider("PV System-Verluste (%)", LIMITS.loss_min, LIMITS.loss_max, key="cfg_loss",
+                  help="Verluste durch Kabel, Verschmutzung, Temperatur, Mismatch etc. "
+                       "**Ohne Wechselrichterverluste**, da diese separat berechnet werden (s.u.), "
+                       "daher etwas niedriger als PVGIS-Empfehlung von 14%.",
                   **widget_value("cfg_loss"))
         
         # Inverter efficiency curve selection
@@ -277,6 +302,7 @@ def _render_pv_system_section() -> None:
                 "Wechselrichter-Limit (W)", step=100, 
                 min_value=LIMITS.inverter_limit_w_min,
                 key="cfg_inverter_limit_w",
+                help="Maximale AC-Ausgangsleistung des Wechselrichters in Watt.",
                 **widget_value("cfg_inverter_limit_w"))
         st.number_input("Kosten PV-System ohne Speicher (€)", step=50, key="cfg_base_cost",
                         **widget_value("cfg_base_cost"))
@@ -286,8 +312,6 @@ def _render_pv_system_section() -> None:
 
 def _render_inverter_efficiency_section() -> None:
     """Render inverter efficiency curve selection and custom curve editor."""
-    from inverter_efficiency import DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT
-    
     # Efficiency preset options
     _preset_options = {
         "pessimistic": "🔻 Pessimistisch (P10)",
@@ -324,8 +348,6 @@ def _render_inverter_efficiency_section() -> None:
 
 def _render_custom_efficiency_editor() -> None:
     """Render the custom efficiency curve editor."""
-    from inverter_efficiency import DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT
-    
     # Initialize custom values if not present
     if "_inverter_eff_custom" not in st.session_state:
         st.session_state._inverter_eff_custom = list(DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT)
@@ -361,13 +383,11 @@ def _render_custom_efficiency_editor() -> None:
         st.session_state._inverter_eff_custom = new_values
         st.rerun()
     
-    st.caption("💡 Tipp: CEC-Wechselrichterdaten unter [energy.ca.gov](https://www.energy.ca.gov/programs-and-topics/programs/solar-equipment-lists)")
+    st.caption("💡 Tipp: CEC-Wechselrichterdaten unter [energy.ca.gov](https://www.energy.ca.gov/programs-and-topics/programs/solar-equipment-lists) prüfen")
 
 
 def _show_efficiency_curve_info(preset: str) -> None:
     """Show information about the selected efficiency curve preset."""
-    from inverter_efficiency import INVERTER_EFFICIENCY_CURVES
-    
     if preset not in INVERTER_EFFICIENCY_CURVES:
         return
     
@@ -399,6 +419,7 @@ def _render_modules_config() -> None:
             )
             modules[i]["slope"] = st.slider(
                 "Neigung (°)", 0, 90, mod["slope"], key=f"ms_{mid}",
+                help="0° = horizontal (flach), 90° = vertikal (senkrecht an der Wand)",
             )
             if len(modules) > 1 and st.button("🗑️ Modul entfernen", key=f"md_{mid}"):
                 modules.pop(i)
@@ -421,6 +442,10 @@ def _render_storage_section() -> None:
             "Speicheranbindung", _coupling_options, horizontal=True,
             index=_coupling_options.index(sv("cfg_dc_coupled")),
             key="cfg_dc_coupled",
+            help="**DC-gekoppelt**: Batterie lädt ohne Limit direkt von den Panels - "
+                 "Wechselrichter-Limit gilt nur für die AC-Seite. "
+                 "**AC-gekoppelt**: Batterie lädt mit Limit von AC – "
+                 "Wechselrichter-Limit begrenzt den gesamten PV-Ertrag."
         )
         st.slider("Lade-/Entladeverluste (%)", LIMITS.batt_loss_min, LIMITS.batt_loss_max, 
                   key="cfg_batt_loss",
@@ -483,9 +508,13 @@ def _render_prices_section() -> None:
         st.number_input(
             "Einspeisevergütung (ct/kWh)", step=0.5, min_value=0.0,
             format="%.1f", key="cfg_feed_in_tariff",
+            help="Vergütung für ins Netz eingespeisten Strom. "
+                 "In Deutschland aktuell ca. 8,0 ct/kWh für Anlagen bis 10 kWp. "
+                 "Bei Balkonkraftwerken in der Regel keine Vergütung aufgrund vereinfachter Anmeldung.",
             **widget_value("cfg_feed_in_tariff"))
         st.number_input(
             "ETF-Rendite (%/a)", step=0.5, format="%.1f", key="cfg_etf_ret",
+            help="Angenommene Rendite eines beispielhaften ETF als alternatives Investment.",
             min_value=LIMITS.etf_ret_min, max_value=LIMITS.etf_ret_max,
             **widget_value("cfg_etf_ret"))
         st.slider("Analyse-Horizont (Jahre)", LIMITS.years_min, LIMITS.years_max, 

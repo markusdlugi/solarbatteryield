@@ -7,7 +7,7 @@ import zlib
 import streamlit as st
 
 from config import (
-    CONFIG_KEYS_SIMPLE, PERSISTED_KEYS, PROFILE_BASE, DEFAULT_ANNUAL_KWH,
+    CONFIG_KEYS_SIMPLE, PERSISTED_KEYS, PROFILE_BASE,
     FLEX_DELTA_DEFAULT, PERIODIC_DELTA_DEFAULT, DEFAULT_MODULES, DEFAULT_STORAGES,
     SESSION_STATE_DEFAULTS
 )
@@ -110,6 +110,10 @@ def init_session_state() -> None:
     if "_periodic_delta" not in st.session_state:
         st.session_state._periodic_delta = list(PERIODIC_DELTA_DEFAULT)
 
+    # Track profile mode for detecting Einfach → Erweitert switches
+    if "_prev_profile_mode" not in st.session_state:
+        st.session_state._prev_profile_mode = sv("cfg_profile_mode")
+
     # Persist widget values when expanders are collapsed
     for _k in PERSISTED_KEYS:
         _bk = f"_bak_{_k}"
@@ -144,8 +148,3 @@ def widget_value(key: str, default=None) -> dict:
         default = SESSION_STATE_DEFAULTS.get(key)
     return {"value": default}
 
-
-def scale_profile_to_annual_kwh(annual_kwh: float) -> list[int]:
-    """Scale the base consumption profile to match the desired annual consumption."""
-    scale = annual_kwh / DEFAULT_ANNUAL_KWH
-    return [round(w * scale) for w in PROFILE_BASE]

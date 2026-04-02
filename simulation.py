@@ -8,20 +8,13 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import numpy as np
-import pandas as pd
 
 from models import SimulationParams, MonthlyData, HourlyResult, SimulationResult
-from h0_profile import get_h0_load, get_day_type, DayType
+from h0_profile import get_h0_load, get_day_type, get_season, DayType, Season
 from inverter_efficiency import (
     get_inverter_efficiency,
     DEFAULT_INVERTER_EFFICIENCY_CURVE,
 )
-
-
-# Season definitions - centralized for consistency
-WINTER_MONTHS = frozenset({11, 12, 1, 2, 3})
-SUMMER_MONTHS = frozenset({5, 6, 7, 8, 9})
-TRANSITION_MONTHS = frozenset({4, 10})
 
 
 
@@ -60,18 +53,6 @@ class SimulationState:
         self.curtailed += result.curtailed
 
 
-def get_season(month: int) -> str:
-    """Return season name for a given month (1-12)."""
-    if month in WINTER_MONTHS:
-        return "winter"
-    elif month in SUMMER_MONTHS:
-        return "summer"
-    return "transition"
-
-
-def is_winter_month(month: int) -> bool:
-    """Check if month is considered winter for SoC limits."""
-    return month in {10, 11, 12, 1, 2, 3}
 
 
 def _calculate_hourly_load(
@@ -113,11 +94,11 @@ def _calculate_hourly_load(
         
         # Apply seasonal scaling (only in advanced mode)
         if params.seasonal_enabled:
-            season = get_season(month)
+            season = get_season(month, current_date.day)
             season_factors = {
-                "winter": params.season_winter_pct / 100,
-                "summer": params.season_summer_pct / 100,
-                "transition": 1.0,
+                Season.WINTER: params.season_winter_pct / 100,
+                Season.SUMMER: params.season_summer_pct / 100,
+                Season.TRANSITION: 1.0,
             }
             load *= season_factors[season]
     
@@ -333,7 +314,7 @@ def simulate(
         _update_flex_pool(hour, day, pv_raw, i, state, params)
         
         # Set SoC limits based on season
-        if is_winter_month(month):
+        if get_season(month, current_date.day) == Season.WINTER:
             state.min_soc = cap_gross * params.min_soc_winter_pct / 100
             state.max_soc = cap_gross * params.max_soc_winter_pct / 100
         else:

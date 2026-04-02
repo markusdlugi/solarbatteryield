@@ -92,6 +92,10 @@ Die Simulation läuft stündlich über ein volles Kalenderjahr (8.760 Stunden):
 - **Einspeisevergütung** bleibt konstant (entspricht deutschem EEG)
 - **ETF-Vergleich** – Gleicher Investitionsbetrag mit konfigurierter Jahresrendite
 
+## Konfiguration teilen
+
+Über den Button **🔗 Link mit aktueller Konfiguration erstellen** werden alle Parameter (inkl. Module, Speicher, Profile) als komprimierter Base64-String in die URL kodiert. Der Link kann geteilt werden – beim Öffnen wird die Konfiguration automatisch wiederhergestellt.
+
 ## Datenquellen
 
 | Dienst oder Datenquelle                                                                                          | Zweck | Anbieter                                               |
@@ -112,10 +116,6 @@ Die Wechselrichter-Wirkungsgradkurven basieren auf dem CEC (California Energy Co
 - **Optimistisch (P90)**: 90. Perzentil – Premium-/Hocheffizienz-Geräte
 
 Zusätzlich können Experten eigene Wirkungsgradkurven eingeben.
-
-## Konfiguration teilen
-
-Über den Button **🔗 Link mit aktueller Konfiguration erstellen** werden alle Parameter (inkl. Module, Speicher, Profile) als komprimierter Base64-String in die URL kodiert. Der Link kann geteilt werden – beim Öffnen wird die Konfiguration automatisch wiederhergestellt.
 
 ## Lizenz
 

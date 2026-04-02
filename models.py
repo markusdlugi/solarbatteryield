@@ -4,6 +4,12 @@ Provides type-safe configuration and result structures.
 """
 from dataclasses import dataclass, field
 
+from inverter_efficiency import (
+    DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT,
+    DEFAULT_INVERTER_EFFICIENCY_CURVE,
+    INVERTER_EFFICIENCY_CURVES,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class HourlyResult:
@@ -71,7 +77,7 @@ class ConsumptionConfig:
     # Seasonal scaling (only used in advanced mode)
     seasonal_enabled: bool = True
     season_winter_pct: int = 114  # Winter factor (%)
-    season_summer_pct: int = 87   # Summer factor (%)
+    season_summer_pct: int = 86   # Summer factor (%)
     
     # Flexible load shifting (sunny days)
     flex_enabled: bool = False
@@ -112,7 +118,6 @@ class PVSystemConfig:
     def __post_init__(self) -> None:
         """Initialize custom efficiency with P50 defaults if empty."""
         if not self.inverter_efficiency_custom:
-            from inverter_efficiency import DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT
             self.inverter_efficiency_custom = list(DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT)
 
 
@@ -282,8 +287,6 @@ class SimulationConfig:
         
         Returns a tuple of (power_level_percent, efficiency) pairs.
         """
-        from inverter_efficiency import INVERTER_EFFICIENCY_CURVES, DEFAULT_INVERTER_EFFICIENCY_CURVE
-        
         preset = self.pv_system.inverter_efficiency_preset
         
         if preset == "custom":
