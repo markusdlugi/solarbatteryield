@@ -264,6 +264,13 @@ class ColorScheme:
     yield_medium: float = 8.0
     amortization_good: float = 5.0
     amortization_medium: float = 10.0
+    
+    # Full cycles thresholds (per year)
+    # < 150: Low utilization (battery likely oversized)
+    # 150-300: Optimal range (good balance, ~0.4-0.8 cycles/day)
+    # > 300: High utilization (faster aging, rare in practice)
+    cycles_low: float = 150.0
+    cycles_high: float = 300.0
 
 
 COLORS = ColorScheme()

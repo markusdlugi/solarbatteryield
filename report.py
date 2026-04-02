@@ -13,7 +13,7 @@ from config import MONTH_LABELS, COLORS
 from models import SimulationConfig, AnalysisResult, ScenarioResult
 from utils import (
     de, de_styler, color_pos_neg, color_amort, color_rendite,
-    color_autarkie, color_eigenverbrauch, build_yearly_data,
+    color_autarkie, color_eigenverbrauch, color_vollzyklen, build_yearly_data,
     find_breakeven, calc_amortization_with_price_increase
 )
 from state import encode_config
@@ -95,6 +95,7 @@ class Report:
                 "Eingespart (kWh/a)": round(r.saved_kwh),
                 "Autarkie (%)": round(r.autarky, 1),
                 "Eigenverbr. (%)": round(r.self_consumption, 1),
+                "Vollzyklen/a": round(r.full_cycles, 1) if r.storage_capacity > 0 else 0,
             }
             if self.feed_in_tariff > 0:
                 row["Vergütung (€/a)"] = round(feed_rev, 2)
@@ -104,6 +105,7 @@ class Report:
         overview_fmt = {
             "Autarkie (%)": de_styler(1),
             "Eigenverbr. (%)": de_styler(1),
+            "Vollzyklen/a": de_styler(1),
             "Ersparnis (€/a)": de_styler(2),
         }
         if self.feed_in_tariff > 0:
@@ -112,7 +114,8 @@ class Report:
             pd.DataFrame(overview_rows).style
             .format(overview_fmt)
             .map(color_autarkie, subset=["Autarkie (%)"])
-            .map(color_eigenverbrauch, subset=["Eigenverbr. (%)"]),
+            .map(color_eigenverbrauch, subset=["Eigenverbr. (%)"])
+            .map(color_vollzyklen, subset=["Vollzyklen/a"]),
             use_container_width=True, hide_index=True,
         )
 

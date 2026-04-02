@@ -27,6 +27,7 @@ class SimulationState:
     feed_in: float = 0.0
     curtailed: float = 0.0
     total_consumption: float = 0.0
+    total_battery_discharge: float = 0.0
     flex_pool: float = 0.0
     use_flex_today: bool = False
     
@@ -52,6 +53,7 @@ class SimulationState:
         self.grid_import += result.grid_import
         self.feed_in += result.feed_in
         self.curtailed += result.curtailed
+        self.total_battery_discharge += result.battery_discharge
 
 
 
@@ -348,10 +350,14 @@ def simulate(
         state.accumulate_result(result)
         monthly[month].add_hourly_result(result)
     
+    # Calculate full cycles: total discharge energy / battery capacity
+    full_cycles = state.total_battery_discharge / cap_gross if cap_gross > 0 else 0.0
+    
     return SimulationResult(
         grid_import=state.grid_import,
         total_consumption=state.total_consumption,
         feed_in=state.feed_in,
         curtailed=state.curtailed,
         monthly=monthly,
+        full_cycles=full_cycles,
     )

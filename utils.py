@@ -71,6 +71,21 @@ def color_eigenverbrauch(val) -> str:
     return f"color: {COLORS.negative}"
 
 
+def color_vollzyklen(val) -> str:
+    """
+    Color full cycles/year: green 150-350 (optimal), orange outside (sub-optimal).
+    
+    - < 150: Battery may be oversized, low utilization
+    - 150-350: Optimal balance between utilization and longevity
+    - > 350: High utilization, faster battery aging
+    """
+    if not isinstance(val, (int, float)) or val == 0:
+        return ""
+    if COLORS.cycles_low <= val <= COLORS.cycles_high:
+        return f"color: {COLORS.positive}"
+    return f"color: {COLORS.warning}"
+
+
 @st.cache_data
 def build_yearly_data(saved_kwh: float, feed_in_kwh: float, feed_in_tariff: float,
                       cost: float, e_price: float, e_inc: float, 

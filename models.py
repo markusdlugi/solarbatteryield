@@ -349,6 +349,7 @@ class SimulationResult:
     feed_in: float  # Total feed-in (kWh)
     curtailed: float  # Total curtailed energy (kWh)
     monthly: dict[int, MonthlyData]  # Monthly breakdown
+    full_cycles: float = 0.0  # Number of full battery cycles per year
 
 
 @dataclass
@@ -379,6 +380,10 @@ class ScenarioResult:
     @property
     def monthly(self) -> dict[int, MonthlyData]:
         return self.simulation.monthly
+    
+    @property
+    def full_cycles(self) -> float:
+        return self.simulation.full_cycles
     
     @property
     def autarky(self) -> float:
