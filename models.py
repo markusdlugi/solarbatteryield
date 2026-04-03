@@ -61,7 +61,7 @@ class LocationConfig:
 @dataclass
 class ConsumptionConfig:
     """Household consumption configuration."""
-    profile_mode: str = "Einfach"  # "Einfach" or "Erweitert"
+    profile_mode: str = "Einfach"  # "Einfach", "Erweitert", or "Experte"
     annual_kwh: float | None = None
     
     # Load profiles (in Watts for each hour 0-23)
@@ -73,6 +73,10 @@ class ConsumptionConfig:
     # If None, active_base is used for all days
     profile_saturday: list[int] | None = None
     profile_sunday: list[int] | None = None
+    
+    # Full year hourly profile (expert mode only)
+    # Contains hourly consumption in Watts for the entire year (8760 or 8784 values)
+    yearly_profile: list[float] | None = None
     
     # Seasonal scaling (only used in advanced mode)
     seasonal_enabled: bool = True
@@ -94,6 +98,10 @@ class ConsumptionConfig:
     def has_day_type_profiles(self) -> bool:
         """Check if separate day-type profiles are provided."""
         return self.profile_saturday is not None and self.profile_sunday is not None
+    
+    def has_yearly_profile(self) -> bool:
+        """Check if a full year hourly profile is provided (expert mode)."""
+        return self.yearly_profile is not None and len(self.yearly_profile) > 0
 
 
 @dataclass
@@ -182,13 +190,17 @@ class SimulationParams:
     inverter_efficiency_curve: tuple[tuple[int, float], ...]  # Power-dependent efficiency curve
     
     # Consumption profile mode
-    profile_mode: str  # "Einfach" or "Erweitert"
+    profile_mode: str  # "Einfach", "Erweitert", or "Experte"
     annual_kwh: float | None  # Required for simple mode
     
     # Custom consumption profiles (for advanced mode)
     profile_base: list[float]
     profile_saturday: list[float] | None  # None = use profile_base
     profile_sunday: list[float] | None    # None = use profile_base
+    
+    # Full year hourly profile (expert mode only)
+    # Contains hourly consumption in Watts for the entire year
+    yearly_profile: list[float] | None
     
     # Seasonal scaling (advanced mode only)
     seasonal_enabled: bool
@@ -210,6 +222,10 @@ class SimulationParams:
     def use_h0_profile(self) -> bool:
         """Check if H0 standard profile should be used."""
         return self.profile_mode == "Einfach"
+    
+    def use_yearly_profile(self) -> bool:
+        """Check if full year hourly profile should be used (expert mode)."""
+        return self.profile_mode == "Experte" and self.yearly_profile is not None
     
     def has_day_type_profiles(self) -> bool:
         """Check if separate day-type profiles are provided."""
@@ -233,6 +249,7 @@ class SimulationParams:
             profile_base=config.consumption.active_base,
             profile_saturday=config.consumption.profile_saturday,
             profile_sunday=config.consumption.profile_sunday,
+            yearly_profile=config.consumption.yearly_profile,
             seasonal_enabled=config.consumption.seasonal_enabled,
             season_winter_pct=config.consumption.season_winter_pct,
             season_summer_pct=config.consumption.season_summer_pct,
@@ -309,6 +326,8 @@ class SimulationConfig:
             missing.append("📍 **Standort** – Breitengrad und Längengrad eingeben oder Ort suchen")
         if self.consumption.profile_mode == "Einfach" and self.consumption.annual_kwh is None:
             missing.append("💡 **Jahresverbrauch** – jährlichen Stromverbrauch in kWh angeben")
+        if self.consumption.profile_mode == "Experte" and not self.consumption.has_yearly_profile():
+            missing.append("📊 **Jahreslastprofil** – CSV-Datei mit stündlichen Verbrauchsdaten hochladen")
         return len(missing) == 0, missing
     
     def to_simulation_params(self) -> SimulationParams:

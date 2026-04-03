@@ -155,6 +155,7 @@ def _make_sim_params_from_config() -> SimulationParams:
         ],
         profile_saturday=None,
         profile_sunday=None,
+        yearly_profile=None,
         seasonal_enabled=True,
         season_winter_pct=114,
         season_summer_pct=86,

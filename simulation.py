@@ -64,16 +64,22 @@ def _calculate_hourly_load(
     params: SimulationParams,
     day: int,
     use_flex_today: bool,
+    hour_index: int = 0,
 ) -> float:
     """
     Calculate the load for a specific hour.
     
     For simple mode: Uses BDEW H0 standard load profile with day type differentiation
     For advanced mode: Uses user-provided profiles with optional seasonal scaling
+    For expert mode: Uses uploaded yearly hourly profile directly
     """
     month = current_date.month
     
-    if params.use_h0_profile():
+    if params.use_yearly_profile():
+        # Expert mode: Use the yearly profile directly
+        # Profile values are in Watts, convert to kWh
+        load = params.yearly_profile[hour_index] / 1000
+    elif params.use_h0_profile():
         # Simple mode: Use H0 profile
         # get_h0_load returns kWh directly
         load = get_h0_load(hour, current_date, params.annual_kwh)
@@ -335,9 +341,9 @@ def simulate(
             state.min_soc = cap_gross * params.min_soc_summer_pct / 100
             state.max_soc = cap_gross * params.max_soc_summer_pct / 100
         
-        # Calculate load for this hour (handles both H0 and custom profiles)
+        # Calculate load for this hour (handles H0, custom, and yearly profiles)
         load = _calculate_hourly_load(
-            hour, current_date, params, day, state.use_flex_today
+            hour, current_date, params, day, state.use_flex_today, hour_index=i
         )
         
         gen_dc = pv_raw[i]

@@ -101,6 +101,11 @@ def get_config() -> SimulationConfig:
         profile_saturday = st.session_state.get("_profile_saturday")
         profile_sunday = st.session_state.get("_profile_sunday")
     
+    # Get yearly profile for expert mode
+    yearly_profile = None
+    if sv("cfg_profile_mode") == "Experte":
+        yearly_profile = st.session_state.get("_yearly_profile")
+    
     return SimulationConfig(
         location=LocationConfig(
             lat=sv("cfg_lat"),
@@ -112,6 +117,7 @@ def get_config() -> SimulationConfig:
             active_base=st.session_state._active_base,
             profile_saturday=profile_saturday,
             profile_sunday=profile_sunday,
+            yearly_profile=yearly_profile,
             seasonal_enabled=sv("cfg_seasonal_enabled"),
             season_winter_pct=sv("cfg_season_winter"),
             season_summer_pct=sv("cfg_season_summer"),

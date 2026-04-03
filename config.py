@@ -100,6 +100,7 @@ class ConfigDefaults:
     lon: float | None = None
     
     # Consumption
+    # Profile modes: "Einfach" (H0), "Erweitert" (custom daily), "Experte" (full year CSV)
     profile_mode: str = "Einfach"
     annual_kwh: float | None = None
     seasonal_enabled: bool = True

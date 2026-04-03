@@ -2,6 +2,9 @@
 Sidebar UI components for the PV analysis application.
 Contains all configuration widgets and input controls.
 """
+import io
+from datetime import datetime, timedelta
+
 import pandas as pd
 import streamlit as st
 
@@ -77,13 +80,14 @@ def _render_location_section() -> None:
 def _render_consumption_section() -> None:
     """Render the consumption configuration section."""
     with st.sidebar.expander("💡 Verbrauch"):
-        _profile_modes = ["Einfach", "Erweitert"]
+        _profile_modes = ["Einfach", "Erweitert", "Experte"]
         st.radio(
             "Lastprofil-Modus", _profile_modes, horizontal=True,
             index=_profile_modes.index(sv("cfg_profile_mode")),
             key="cfg_profile_mode",
             help="**Einfach**: BDEW H0-Standardlastprofil mit Unterscheidung nach Wochentag/Samstag/Sonntag. "
-                 "**Erweitert**: Eigenes stündliches Lastprofil mit optionaler Saisonskalierung.",
+                 "**Erweitert**: Eigenes stündliches Lastprofil mit optionaler Saisonskalierung. "
+                 "**Experte**: Eigene Jahresdaten aus Smart-Meter als CSV hochladen.",
         )
         
         # Detect switch from Einfach → Erweitert: pre-fill profiles from annual kWh
@@ -105,9 +109,11 @@ def _render_consumption_section() -> None:
             st.caption("📊 Das BDEW H0-Standardlastprofil berücksichtigt automatisch "
                       "unterschiedliche Verbräuche an Werktagen, Samstagen und Sonn-/Feiertagen "
                       "sowie saisonale Unterschiede.")
-        else:
+        elif current_mode == "Erweitert":
             _render_advanced_profile_settings()
             _render_seasonal_settings()
+        else:  # Experte
+            _render_expert_profile_settings()
 
         _render_flex_load_settings()
         _render_periodic_load_settings()
@@ -193,6 +199,163 @@ def _render_advanced_profile_settings() -> None:
         if new_values != st.session_state._active_base:
             st.session_state._active_base = new_values
             st.rerun()
+
+
+def _generate_yearly_template_csv(year: int) -> str:
+    """Generate a CSV template with timestamps for a full year.
+    
+    Args:
+        year: The year to generate timestamps for (determines leap year handling)
+        
+    Returns:
+        CSV content as a string with Time and Power(W) columns, semicolon-separated
+    """
+    # Determine number of hours in the year
+    is_leap = (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
+    num_hours = 8784 if is_leap else 8760
+    
+    # Generate timestamps
+    start_dt = datetime(year, 1, 1, 0, 0, 0)
+    timestamps = [(start_dt + timedelta(hours=h)).strftime("%Y-%m-%d %H:%M") for h in range(num_hours)]
+    
+    # Create CSV content with semicolon separator
+    output = io.StringIO()
+    output.write("Time;Power(W)\n")
+    for ts in timestamps:
+        output.write(f"{ts};\n")
+    
+    return output.getvalue()
+
+
+def _parse_yearly_profile_csv(uploaded_file, expected_year: int) -> tuple[list[float] | None, str | None]:
+    """Parse an uploaded CSV file containing yearly consumption data.
+    
+    Args:
+        uploaded_file: Streamlit uploaded file object
+        expected_year: The expected PVGIS year for validation
+        
+    Returns:
+        Tuple of (profile_data, error_message). One will be None.
+    """
+    try:
+        # Read CSV with semicolon separator
+        df = pd.read_csv(uploaded_file, sep=";")
+        
+        # Check required columns
+        if len(df.columns) < 2:
+            return None, "CSV muss mindestens 2 Spalten haben (Zeit und Leistung)"
+        
+        # Get power column (second column)
+        power_col = df.columns[1]
+        
+        # Check for empty/null values
+        if df[power_col].isna().any():
+            missing_count = df[power_col].isna().sum()
+            return None, f"CSV enthält {missing_count} leere Werte in der Leistungsspalte"
+        
+        # Convert to numeric, handling potential string values
+        try:
+            power_values = pd.to_numeric(df[power_col], errors='coerce')
+            if power_values.isna().any():
+                return None, "Einige Werte in der Leistungsspalte sind keine gültigen Zahlen"
+        except Exception:
+            return None, "Fehler beim Parsen der Leistungswerte"
+        
+        # Check for expected number of hours
+        is_leap = (expected_year % 4 == 0 and expected_year % 100 != 0) or (expected_year % 400 == 0)
+        expected_hours = 8784 if is_leap else 8760
+        
+        if len(power_values) != expected_hours:
+            return None, (f"CSV enthält {len(power_values)} Zeilen, aber {expected_hours} werden "
+                         f"für das Jahr {expected_year} erwartet")
+        
+        # Check for negative values
+        if (power_values < 0).any():
+            neg_count = (power_values < 0).sum()
+            return None, f"CSV enthält {neg_count} negative Werte"
+        
+        return power_values.tolist(), None
+        
+    except pd.errors.EmptyDataError:
+        return None, "CSV-Datei ist leer"
+    except pd.errors.ParserError as e:
+        return None, f"CSV-Parsing-Fehler: {e}"
+    except Exception as e:
+        return None, f"Unerwarteter Fehler: {e}"
+
+
+def _render_expert_profile_settings() -> None:
+    """Render expert mode profile settings with CSV upload."""
+    st.caption("📊 Lade dein eigenes Jahreslastprofil als CSV-Datei hoch")
+    
+    # Get current year selection for template generation
+    current_year = sv("cfg_year")
+    
+    # Template download section
+    st.markdown("**1. Vorlage herunterladen**")
+    template_csv = _generate_yearly_template_csv(current_year)
+    
+    st.download_button(
+        label=f"📥 Vorlage für {current_year} herunterladen",
+        data=template_csv,
+        file_name=f"lastprofil_vorlage_{current_year}.csv",
+        mime="text/csv",
+        help=f"CSV-Vorlage mit Zeitstempeln für das Jahr {current_year}. "
+             "Fülle die zweite Spalte mit deinen Verbrauchsdaten in Watt.",
+    )
+    
+    is_leap = (current_year % 4 == 0 and current_year % 100 != 0) or (current_year % 400 == 0)
+    num_hours = 8784 if is_leap else 8760
+    st.caption(f"Die Vorlage enthält {num_hours} Stunden für {current_year}.")
+    
+    # Upload section
+    st.markdown("**2. Ausgefüllte Datei hochladen**")
+    uploaded_file = st.file_uploader(
+        "CSV-Datei hochladen",
+        type=["csv"],
+        key="yearly_profile_upload",
+        help="Lade die ausgefüllte CSV-Datei mit deinen stündlichen Verbrauchsdaten hoch.",
+    )
+    
+    # Process uploaded file
+    if uploaded_file is not None:
+        profile_data, error = _parse_yearly_profile_csv(uploaded_file, current_year)
+        
+        if error:
+            st.error(f"❌ {error}")
+            st.session_state._yearly_profile = None
+            st.session_state._yearly_profile_stats = None
+        else:
+            # Store profile in session state
+            st.session_state._yearly_profile = profile_data
+            
+            # Calculate and display statistics
+            total_kwh = sum(profile_data) / 1000
+            avg_w = sum(profile_data) / len(profile_data)
+            max_w = max(profile_data)
+            min_w = min(profile_data)
+            
+            st.session_state._yearly_profile_stats = {
+                "total_kwh": total_kwh,
+                "avg_w": avg_w,
+                "max_w": max_w,
+                "min_w": min_w,
+            }
+            
+            st.success(f"✅ Profil erfolgreich geladen ({len(profile_data)} Stunden)")
+    
+    # Show profile statistics if available
+    if st.session_state.get("_yearly_profile_stats"):
+        stats = st.session_state._yearly_profile_stats
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Jahresverbrauch", f"{stats['total_kwh']:.0f} kWh")
+            st.metric("Min. Leistung", f"{stats['min_w']:.0f} W")
+        with col2:
+            st.metric("Ø Leistung", f"{stats['avg_w']:.0f} W")
+            st.metric("Max. Leistung", f"{stats['max_w']:.0f} W")
+    elif "_yearly_profile" not in st.session_state or st.session_state._yearly_profile is None:
+        st.info("💡 Lade eine CSV-Datei mit deinen Smart-Meter-Daten hoch, um fortzufahren.")
 
 
 
