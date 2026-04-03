@@ -1,6 +1,6 @@
-# ☀️ PV-Analyse mit Speichervergleich
+# ☀️ SolarBatterYield - PV-Analyse mit Speichervergleich
 
-https://pv-analysis.streamlit.app/
+https://solarbatteryield.streamlit.app/
 
 Eine interaktive Streamlit-App zur Simulation und Wirtschaftlichkeitsanalyse von Photovoltaik-Anlagen mit Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlagen.
 

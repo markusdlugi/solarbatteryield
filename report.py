@@ -68,7 +68,7 @@ class Report:
 
     def _render_header(self) -> None:
         """Render the main header section with key metrics."""
-        st.title("☀️ PV-Analyse mit Speichervergleich")
+        st.title("☀️ SolarBatterYield - PV-Analyse mit Speichervergleich")
         place_name = reverse_geocode(self.config.lat, self.config.lon)
         location_str = f"{place_name} ({self.config.lat}°N / {self.config.lon}°E)" if place_name else f"{self.config.lat}°N / {self.config.lon}°E"
         st.caption(f"PVGIS-Stundenwerte {self.config.pv_system.data_year}  ·  Standort {location_str}")
@@ -452,7 +452,7 @@ def render_report(config: SimulationConfig, results: AnalysisResult) -> None:
 
 def render_missing_config_message(missing: list[str]) -> None:
     """Render message when required configuration is missing."""
-    st.title("☀️ PV-Analyse mit Speichervergleich")
+    st.title("☀️ SolarBatterYield - PV-Analyse mit Speichervergleich")
     st.info(
         "Bitte konfiguriere mindestens folgende Parameter in der **Seitenleiste** (⚙️), "
         "um die Analyse zu starten:"
