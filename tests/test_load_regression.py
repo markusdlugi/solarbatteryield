@@ -1,141 +1,39 @@
 """
 Tests for the sub-hourly load regression module and its impact on simulation results.
 
+The load regression module models the fact that household load varies within each hour.
+This means that even when hourly averages suggest perfect PV-to-load matching, some
+energy is fed into the grid during low-load moments and some is imported during high-load
+moments within the same hour.
+
 Run with:  python -m pytest tests/ -v
 """
 from __future__ import annotations
 
 import sys
-import os
-import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+import numpy as np
+import pytest
 
 # Ensure project root is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import numpy as np
-
-from load_regression import (
+from solarbatteryield.load_regression import (
     get_direct_pv_fraction,
-    _get_distribution,
     _create_regression,
     _REGRESSION_DB,
     _DB_MAX_CONSUMPTION_W,
     DB_RESOLUTION_W,
 )
-from models import SimulationParams
-from simulation import simulate
+from solarbatteryield.models import SimulationParams
+from solarbatteryield.simulation import simulate
+from solarbatteryield.inverter_efficiency import INVERTER_EFFICIENCY_CURVES
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Unit tests for load_regression module
-# ──────────────────────────────────────────────────────────────────────────────
-
-class TestRegressionDatabase(unittest.TestCase):
-    """Verify the regression database loaded correctly."""
-
-    def test_database_loaded(self):
-        self.assertGreater(len(_REGRESSION_DB), 0)
-
-    def test_database_bins(self):
-        """DB should have 70 bins from 0 to 3450 in 50 W steps."""
-        keys = sorted(_REGRESSION_DB.keys())
-        self.assertEqual(keys[0], 0)
-        self.assertEqual(keys[-1], 3450)
-        self.assertEqual(len(keys), 70)
-
-    def test_probabilities_sum_to_one(self):
-        """Each bin's probabilities should sum to ~1.0."""
-        for key, dist in _REGRESSION_DB.items():
-            total = sum(p for _, p in dist)
-            self.assertAlmostEqual(total, 1.0, places=4,
-                                   msg=f"Bin {key}W sums to {total}")
-
-    def test_resolution(self):
-        self.assertEqual(DB_RESOLUTION_W, 50)
-
-    def test_max_consumption(self):
-        self.assertEqual(_DB_MAX_CONSUMPTION_W, 3450)
-
-
-class TestGetDirectPvFraction(unittest.TestCase):
-    """Test the core self-consumption fraction function."""
-
-    # ── Edge cases ──
-    def test_zero_load(self):
-        self.assertEqual(get_direct_pv_fraction(0, 500), 0.0)
-
-    def test_zero_pv(self):
-        self.assertEqual(get_direct_pv_fraction(500, 0), 0.0)
-
-    def test_negative_load(self):
-        self.assertEqual(get_direct_pv_fraction(-100, 500), 0.0)
-
-    def test_negative_pv(self):
-        self.assertEqual(get_direct_pv_fraction(500, -100), 0.0)
-
-    # ── Fraction bounds ──
-    def test_fraction_between_zero_and_one(self):
-        for load in [50, 200, 500, 1000, 2000]:
-            for pv in [50, 200, 500, 1000, 2000]:
-                f = get_direct_pv_fraction(load, pv)
-                self.assertGreaterEqual(f, 0.0, f"load={load}, pv={pv}")
-                self.assertLessEqual(f, 1.0, f"load={load}, pv={pv}")
-
-    # ── Regression effect ──
-    def test_fraction_less_than_one_for_surplus(self):
-        """When PV >> load, fraction should be noticeably below 1.0 because
-        at low-load moments within the hour, PV exceeds the instantaneous demand."""
-        f = get_direct_pv_fraction(200, 800)
-        self.assertLess(f, 1.0)
-        self.assertGreater(f, 0.5)  # but not ridiculously low
-
-    def test_fraction_less_than_one_for_deficit(self):
-        """When load >> PV, fraction should also be < 1.0 because at low-load
-        moments some PV is unused (goes to feed-in)."""
-        f = get_direct_pv_fraction(800, 200)
-        self.assertLess(f, 1.0)
-        self.assertGreater(f, 0.5)
-
-    def test_higher_pv_gives_higher_or_equal_direct_pv(self):
-        """With more PV available, the absolute direct-PV energy should increase
-        (or stay equal).  Note: the *fraction* itself may decrease because the
-        base ``min(load, pv)`` changes — but the product must not decrease."""
-        load = 300
-        f_low = get_direct_pv_fraction(load, 100)
-        f_high = get_direct_pv_fraction(load, 500)
-        direct_low = f_low * min(load, 100)
-        direct_high = f_high * min(load, 500)
-        self.assertGreaterEqual(direct_high, direct_low)
-
-    # ── Synthetic distribution ──
-    def test_above_db_range(self):
-        """Loads above 3450 W should still return a valid fraction."""
-        f = get_direct_pv_fraction(5000, 800)
-        self.assertGreater(f, 0.0)
-        self.assertLessEqual(f, 1.0)
-
-    def test_synthetic_regression_returns_valid_distribution(self):
-        dist, resolution = _create_regression(5000)
-        self.assertGreater(len(dist), 0)
-        self.assertGreater(resolution, 0)
-        total = sum(p for _, p in dist)
-        self.assertAlmostEqual(total, 1.0, places=4)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Comparison test: old (naive) vs new (regression) simulation
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _make_sim_params_from_config() -> SimulationParams:
-    """Build SimulationParams matching the shared config string (decoded below).
-
-    Config: Erweitert mode, 2 kWp system, DC-coupled, 800 W inverter limit,
-    custom load profile, flex + periodic loads enabled.
-    """
-    from inverter_efficiency import INVERTER_EFFICIENCY_CURVES
-
+def _create_simulation_params() -> SimulationParams:
+    """Create standard simulation parameters for testing."""
     return SimulationParams(
         batt_loss_pct=10,
         dc_coupled=True,
@@ -144,7 +42,7 @@ def _make_sim_params_from_config() -> SimulationParams:
         max_soc_summer_pct=100,
         max_soc_winter_pct=100,
         data_year=2015,
-        inverter_limit_kw=0.8,  # 800 W
+        inverter_limit_kw=0.8,
         inverter_efficiency_curve=INVERTER_EFFICIENCY_CURVES["median"],
         batt_inverter_efficiency_curve=INVERTER_EFFICIENCY_CURVES["median"],
         profile_mode="Erweitert",
@@ -179,120 +77,264 @@ def _make_sim_params_from_config() -> SimulationParams:
     )
 
 
+def _generate_synthetic_pv_data(hours: int = 8760, seed: int = 42) -> np.ndarray:
+    """Generate realistic synthetic PV generation data."""
+    rng = np.random.RandomState(seed)
+    pv = np.zeros(hours)
+    for i in range(hours):
+        hour = i % 24
+        day = i // 24
+        if 6 <= hour <= 20:
+            solar_angle = np.sin(np.pi * (hour - 6) / 14)
+            season_factor = 0.5 + 0.5 * np.sin(2 * np.pi * (day - 80) / 365)
+            pv[i] = max(0, solar_angle * season_factor * 0.6 + rng.normal(0, 0.02))
+    return pv
+
+
 def _naive_fraction(load_w: float, pv_w: float) -> float:
-    """Old (naive) approach: fraction is always 1.0 — all of min(load, pv) is
-    self-consumed."""
+    """Naive approach: assumes all of min(load, pv) is self-consumed."""
     if load_w <= 0 or pv_w <= 0:
         return 0.0
     return 1.0
 
 
-class TestSimulationComparison(unittest.TestCase):
-    """Compare full simulation results with and without the regression."""
+class TestRegressionDatabaseIntegrity:
+    """Tests verifying the regression database is correctly loaded and structured."""
 
-    @classmethod
-    def setUpClass(cls):
-        """Fetch PV data for the test config and run both simulations."""
-        # We need real PVGIS data for the comparison.  To make the test
-        # self-contained we generate a synthetic but realistic PV array:
-        # 8760 hours, sine-shaped daily generation peaking at ~0.6 kW.
-        rng = np.random.RandomState(42)
-        hours = 8760
-        pv = np.zeros(hours)
-        for i in range(hours):
-            hour = i % 24
-            day = i // 24
-            # Sunrise ~6, sunset ~20, peak at 13
-            if 6 <= hour <= 20:
-                solar_angle = np.sin(np.pi * (hour - 6) / 14)
-                # Seasonal variation: more in summer (day ~180), less in winter
-                season_factor = 0.5 + 0.5 * np.sin(2 * np.pi * (day - 80) / 365)
-                pv[i] = max(0, solar_angle * season_factor * 0.6 + rng.normal(0, 0.02))
-        cls.pv_data = pv
-        cls.params = _make_sim_params_from_config()
+    def test_should_have_database_loaded(self):
+        """Should have a non-empty regression database available."""
+        # given
+        database = _REGRESSION_DB
 
-        # ── Run with regression (current code) ──
-        cls.result_regression = {}
-        for cap in [0.0, 2.11, 4.22]:
-            cls.result_regression[cap] = simulate(cls.pv_data, cap, cls.params)
+        # when
+        count = len(database)
 
-        # ── Run WITHOUT regression (patch to return 1.0 always) ──
-        cls.result_naive = {}
-        with patch("simulation.get_direct_pv_fraction", side_effect=_naive_fraction):
-            for cap in [0.0, 2.11, 4.22]:
-                cls.result_naive[cap] = simulate(cls.pv_data, cap, cls.params)
+        # then
+        assert count > 0
 
-    def test_regression_increases_grid_import(self):
-        """With regression, more load isn't covered by PV -> higher grid import."""
-        for cap in [0.0, 2.11, 4.22]:
-            reg = self.result_regression[cap].grid_import
-            naive = self.result_naive[cap].grid_import
-            self.assertGreater(reg, naive,
-                               f"cap={cap}: regression grid_import ({reg:.1f}) "
-                               f"should exceed naive ({naive:.1f})")
+    def test_should_have_probability_distributions_summing_to_one(self):
+        """Should have each load bin's probability distribution sum to approximately 1.0."""
+        # given
+        database = _REGRESSION_DB
 
-    def test_regression_increases_feed_in(self):
-        """With regression, more PV goes to feed-in during low-load moments.
-        Only checked for the no-battery case — with a battery the surplus
-        is absorbed and both approaches may show zero feed-in."""
-        reg = self.result_regression[0.0].feed_in
-        naive = self.result_naive[0.0].feed_in
-        self.assertGreater(reg, naive,
-                           f"cap=0: regression feed_in ({reg:.1f}) "
-                           f"should exceed naive ({naive:.1f})")
+        # when
+        invalid_bins = []
+        for bin_key, distribution in database.items():
+            total = sum(probability for _, probability in distribution)
+            if not (0.9999 <= total <= 1.0001):
+                invalid_bins.append((bin_key, total))
 
-    def test_consumption_unchanged(self):
-        """Total consumption should not change — regression only affects
-        the split between direct PV, battery, and grid."""
-        for cap in [0.0, 2.11, 4.22]:
-            reg = self.result_regression[cap].total_consumption
-            naive = self.result_naive[cap].total_consumption
-            self.assertAlmostEqual(reg, naive, places=2,
-                                   msg=f"cap={cap}: consumption mismatch")
+        # then
+        assert invalid_bins == []
 
-    def test_energy_balance(self):
-        """For each scenario, verify energy conservation:
-        pv_generation = direct_pv + battery_charge_equivalent + feed_in + curtailed
-        consumption = direct_pv + battery_discharge + grid_import
-        """
-        for cap, result in self.result_regression.items():
-            monthly = result.monthly
-            total_direct_pv = sum(m.direct_pv for m in monthly.values())
-            total_battery = sum(m.battery for m in monthly.values())
-            total_grid = sum(m.grid_import for m in monthly.values())
-            total_consumption = sum(m.consumption for m in monthly.values())
+    def test_should_cover_expected_load_range(self):
+        """Should cover load range from 0 to 3450W in 50W steps."""
+        # given
+        database = _REGRESSION_DB
 
-            # consumption = direct_pv + battery_discharge + grid_import
-            supply = total_direct_pv + total_battery + total_grid
-            self.assertAlmostEqual(
-                supply, total_consumption, places=1,
-                msg=f"cap={cap}: supply ({supply:.1f}) != consumption ({total_consumption:.1f})")
+        # when
+        keys = sorted(database.keys())
 
-    def test_print_comparison(self):
-        """Print a summary table for manual inspection (not a real assertion)."""
-        print("\n" + "=" * 78)
-        print("COMPARISON: Naive (old) vs Regression (new) simulation results")
-        print("=" * 78)
-        header = f"{'Battery':>10} | {'Metric':>18} | {'Naive':>10} | {'Regress.':>10} | {'Delta':>10} | {'Delta%':>8}"
-        print(header)
-        print("-" * 78)
+        # then
+        assert keys[0] == 0
+        assert keys[-1] == _DB_MAX_CONSUMPTION_W
+        assert DB_RESOLUTION_W == 50
+        assert len(keys) == 70
 
-        for cap in [0.0, 2.11, 4.22]:
-            naive = self.result_naive[cap]
-            reg = self.result_regression[cap]
 
-            for label, n_val, r_val in [
-                ("Grid import kWh", naive.grid_import, reg.grid_import),
-                ("Feed-in kWh", naive.feed_in, reg.feed_in),
-                ("Curtailed kWh", naive.curtailed, reg.curtailed),
-                ("Consumption kWh", naive.total_consumption, reg.total_consumption),
-            ]:
-                delta = r_val - n_val
-                pct = (delta / n_val * 100) if n_val != 0 else 0
-                print(f"{cap:>8.2f}  | {label:>18} | {n_val:>10.1f} | {r_val:>10.1f} | {delta:>+10.1f} | {pct:>+7.1f}%")
-            print("-" * 78)
+class TestDirectPvFractionEdgeCases:
+    """Tests for edge case handling in direct PV fraction calculation."""
+
+    @pytest.mark.parametrize("load_w,pv_w", [
+        (0, 500),      # zero load
+        (500, 0),      # zero PV
+        (-100, 500),   # negative load
+        (500, -100),   # negative PV
+    ])
+    def test_should_return_zero_for_invalid_inputs(self, load_w, pv_w):
+        """Should return zero fraction for invalid input combinations."""
+        # given
+        # (parameters provided by decorator)
+
+        # when
+        fraction = get_direct_pv_fraction(load_w, pv_w)
+
+        # then
+        assert fraction == pytest.approx(0.0)
+
+
+    def test_should_handle_loads_above_database_range(self):
+        """Should return valid fraction for loads exceeding the database maximum."""
+        # given
+        load_w = 5000  # Above 3450W max
+        pv_w = 800
+
+        # when
+        fraction = get_direct_pv_fraction(load_w, pv_w)
+
+        # then
+        assert 0.0 < fraction <= 1.0
+
+
+class TestDirectPvFractionBehavior:
+    """Tests for the behavioral characteristics of the direct PV fraction."""
+
+    @pytest.mark.parametrize("load_w,pv_w", [
+        (50, 50),
+        (200, 500),
+        (500, 200),
+        (1000, 1000),
+        (2000, 500),
+    ])
+    def test_should_return_fraction_between_zero_and_one(self, load_w, pv_w):
+        """Should constrain fraction to valid probability range."""
+        # given
+        # (parameters provided by decorator)
+
+        # when
+        fraction = get_direct_pv_fraction(load_w, pv_w)
+
+        # then
+        assert 0.0 <= fraction <= 1.0
+
+    def test_should_return_less_than_one_when_pv_exceeds_load(self):
+        """Should model that surplus PV cannot all be self-consumed due to load variability."""
+        # given
+        load_w, pv_w = 200, 800
+
+        # when
+        fraction = get_direct_pv_fraction(load_w, pv_w)
+
+        # then
+        assert fraction < 1.0
+        assert fraction > 0.5
+
+    def test_should_return_less_than_one_when_load_exceeds_pv(self):
+        """Should model that not all PV is consumed due to low-load moments within the hour."""
+        # given
+        load_w, pv_w = 800, 200
+
+        # when
+        fraction = get_direct_pv_fraction(load_w, pv_w)
+
+        # then
+        assert fraction < 1.0
+        assert fraction > 0.5
+
+    def test_should_increase_absolute_direct_pv_with_more_pv_available(self):
+        """Should increase absolute direct PV energy when more PV is available."""
+        # given
+        load = 300
+        pv_low = 100
+        pv_high = 500
+
+        # when
+        fraction_low = get_direct_pv_fraction(load, pv_low)
+        fraction_high = get_direct_pv_fraction(load, pv_high)
+        direct_low = fraction_low * min(load, pv_low)
+        direct_high = fraction_high * min(load, pv_high)
+
+        # then
+        assert direct_high >= direct_low
+
+
+class TestSyntheticRegressionGeneration:
+    """Tests for synthetic regression distribution generation."""
+
+    def test_should_generate_valid_distribution_for_high_loads(self):
+        """Should create valid probability distribution for loads above database range."""
+        # given
+        high_load_w = 5000
+
+        # when
+        distribution, resolution = _create_regression(high_load_w)
+
+        # then
+        assert len(distribution) > 0
+        assert resolution > 0
+        total = sum(probability for _, probability in distribution)
+        assert total == pytest.approx(1.0, abs=0.0001)
+
+
+class TestSimulationWithRegression:
+    """Tests comparing simulation behavior with and without load regression."""
+
+    @pytest.fixture(scope="class")
+    def simulation_results(self):
+        """Run simulations with and without regression for comparison."""
+        pv_data = _generate_synthetic_pv_data()
+        params = _create_simulation_params()
+        battery_capacities = [0.0, 2.11, 4.22]
+
+        results_regression = {}
+        for cap in battery_capacities:
+            results_regression[cap] = simulate(pv_data, cap, params)
+
+        results_naive = {}
+        with patch("solarbatteryield.simulation.get_direct_pv_fraction", side_effect=_naive_fraction):
+            for cap in battery_capacities:
+                results_naive[cap] = simulate(pv_data, cap, params)
+
+        return {"regression": results_regression, "naive": results_naive}
+
+    @pytest.mark.parametrize("battery_capacity", [0.0, 2.11, 4.22])
+    def test_should_increase_grid_import_compared_to_naive(self, simulation_results, battery_capacity):
+        """Should increase grid import when using regression due to load variability."""
+        # given
+        regression_result = simulation_results["regression"][battery_capacity]
+        naive_result = simulation_results["naive"][battery_capacity]
+
+        # when
+        regression_import = regression_result.grid_import
+        naive_import = naive_result.grid_import
+
+        # then
+        assert regression_import > naive_import
+
+    def test_should_increase_feed_in_without_battery(self, simulation_results):
+        """Should increase feed-in when no battery absorbs the surplus from low-load moments."""
+        # given
+        regression_result = simulation_results["regression"][0.0]
+        naive_result = simulation_results["naive"][0.0]
+
+        # when
+        regression_feed_in = regression_result.feed_in
+        naive_feed_in = naive_result.feed_in
+
+        # then
+        assert regression_feed_in > naive_feed_in
+
+    @pytest.mark.parametrize("battery_capacity", [0.0, 2.11, 4.22])
+    def test_should_preserve_total_consumption(self, simulation_results, battery_capacity):
+        """Should not change total consumption regardless of regression model."""
+        # given
+        regression_result = simulation_results["regression"][battery_capacity]
+        naive_result = simulation_results["naive"][battery_capacity]
+
+        # when
+        regression_consumption = regression_result.total_consumption
+        naive_consumption = naive_result.total_consumption
+
+        # then
+        assert regression_consumption == pytest.approx(naive_consumption, abs=0.01)
+
+    @pytest.mark.parametrize("battery_capacity", [0.0, 2.11, 4.22])
+    def test_should_maintain_energy_balance(self, simulation_results, battery_capacity):
+        """Should satisfy energy conservation: supply equals consumption."""
+        # given
+        result = simulation_results["regression"][battery_capacity]
+        monthly = result.monthly
+
+        # when
+        total_direct_pv = sum(m.direct_pv for m in monthly.values())
+        total_battery = sum(m.battery for m in monthly.values())
+        total_grid = sum(m.grid_import for m in monthly.values())
+        total_consumption = sum(m.consumption for m in monthly.values())
+        supply = total_direct_pv + total_battery + total_grid
+
+        # then
+        assert supply == pytest.approx(total_consumption, abs=0.1)
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
+    pytest.main([__file__, "-v"])

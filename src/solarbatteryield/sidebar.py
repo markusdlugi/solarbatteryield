@@ -8,13 +8,13 @@ from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
 
-from config import PROFILE_SATURDAY, PROFILE_SUNDAY, LIMITS, scale_profiles
-from api import geocode, reverse_geocode, GeocodingError
-from inverter_efficiency import (
+from solarbatteryield.config import PROFILE_SATURDAY, PROFILE_SUNDAY, LIMITS, scale_profiles
+from solarbatteryield.api import geocode, reverse_geocode, GeocodingError
+from solarbatteryield.inverter_efficiency import (
     DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT,
     INVERTER_EFFICIENCY_CURVES,
 )
-from state import sv, widget_value
+from solarbatteryield.state import sv, widget_value
 
 
 def render_sidebar() -> None:

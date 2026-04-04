@@ -6,7 +6,7 @@ import json
 import zlib
 import streamlit as st
 
-from config import (
+from solarbatteryield.config import (
     CONFIG_KEYS_SIMPLE, PERSISTED_KEYS, PROFILE_BASE,
     FLEX_DELTA_DEFAULT, PERIODIC_DELTA_DEFAULT, DEFAULT_MODULES, DEFAULT_STORAGES,
     SESSION_STATE_DEFAULTS

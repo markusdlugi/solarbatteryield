@@ -4,7 +4,7 @@ Provides type-safe configuration and result structures.
 """
 from dataclasses import dataclass, field
 
-from inverter_efficiency import (
+from solarbatteryield.inverter_efficiency import (
     DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT,
     DEFAULT_INVERTER_EFFICIENCY_CURVE,
     INVERTER_EFFICIENCY_CURVES,

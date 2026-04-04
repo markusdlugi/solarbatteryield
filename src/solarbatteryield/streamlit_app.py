@@ -11,17 +11,17 @@ import streamlit as st
 st.set_page_config(page_title="PV & Speicher Analyse", page_icon="☀️", layout="wide")
 
 # Import application modules
-from api import get_pvgis_hourly, PVGISError, APIError
-from config import DEFAULTS
-from models import (
+from solarbatteryield.api import get_pvgis_hourly, PVGISError, APIError
+from solarbatteryield.config import DEFAULTS
+from solarbatteryield.models import (
     SimulationConfig, LocationConfig, ConsumptionConfig, PVSystemConfig,
     StorageConfig, EconomicsConfig, PVModule, StorageOption,
     ScenarioResult, AnalysisResult
 )
-from simulation import simulate
-from state import init_session_state, sv
-from sidebar import render_sidebar
-from report import render_report, render_missing_config_message
+from solarbatteryield.simulation import simulate
+from solarbatteryield.state import init_session_state, sv
+from solarbatteryield.sidebar import render_sidebar
+from solarbatteryield.report import render_report, render_missing_config_message
 
 
 def main():

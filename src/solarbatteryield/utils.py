@@ -4,7 +4,7 @@ Utility functions for formatting and styling in the PV analysis application.
 import pandas as pd
 import streamlit as st
 
-from config import COLORS
+from solarbatteryield.config import COLORS
 
 
 def de(val, decimals: int = 0, sign: bool = False) -> str:

@@ -8,15 +8,15 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from api import reverse_geocode
-from config import MONTH_LABELS, COLORS
-from models import SimulationConfig, AnalysisResult, ScenarioResult
-from utils import (
+from solarbatteryield.api import reverse_geocode
+from solarbatteryield.config import MONTH_LABELS, COLORS
+from solarbatteryield.models import SimulationConfig, AnalysisResult, ScenarioResult
+from solarbatteryield.utils import (
     de, de_styler, color_pos_neg, color_amort, color_rendite,
     color_autarkie, color_eigenverbrauch, color_vollzyklen, build_yearly_data,
     find_breakeven, calc_amortization_with_price_increase
 )
-from state import encode_config
+from solarbatteryield.state import encode_config
 
 
 class Report:

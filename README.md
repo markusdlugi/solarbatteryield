@@ -33,13 +33,18 @@ Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlag
 ## Schnellstart
 
 ```bash
-pip install -r requirements.txt
-streamlit run streamlit_app.py
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install dependencies and run
+uv sync
+uv run streamlit run src/solarbatteryield/streamlit_app.py
 ```
 
 ### Voraussetzungen
 
-- Python ≥ 3.10
+- [uv](https://docs.astral.sh/uv/) (empfohlen) oder pip
+- Python ≥ 3.11
 - Internetverbindung (für PVGIS- und Geocoding-Abfragen)
 
 ## Bedienung
@@ -152,4 +157,51 @@ License, Copyright © 2023 nick81nrw) durchgeführt und als `regression.json` ve
 ## Lizenz
 
 Dieses Projekt steht unter der [MIT License](LICENSE).
+
+## Development
+
+### Project Structure
+
+```
+solarbatteryield/
+├── src/solarbatteryield/   # Application source code
+│   ├── __init__.py
+│   ├── streamlit_app.py    # Main entry point
+│   ├── simulation.py       # Core simulation engine
+│   ├── models.py           # Data classes
+│   └── ...
+├── tests/                  # Test suite
+│   ├── test_simulation.py  # Unit tests
+│   ├── test_snapshots.py   # Snapshot regression tests
+│   ├── test_smoke.py       # Smoke tests
+│   └── __snapshots__/      # Pinned snapshot data
+├── pyproject.toml          # Project configuration
+└── uv.lock                 # Dependency lock file
+```
+
+### Setup
+
+```bash
+git clone https://github.com/your-username/solarbatteryield.git
+cd solarbatteryield
+uv sync --dev
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run specific test files
+uv run pytest tests/test_simulation.py -v
+```
+
+### Updating Snapshots
+
+After intentional changes to simulation logic, update the snapshot tests:
+
+```bash
+uv run pytest tests/test_snapshots.py --snapshot-update
+```
 
