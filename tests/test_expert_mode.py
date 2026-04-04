@@ -5,6 +5,7 @@ import pytest
 from datetime import date
 
 from models import SimulationParams, ConsumptionConfig, SimulationConfig
+from inverter_efficiency import DEFAULT_INVERTER_EFFICIENCY_CURVE
 from simulation import _calculate_hourly_load
 
 
@@ -46,6 +47,7 @@ class TestSimulationParams:
             data_year=2015,
             inverter_limit_kw=0.8,
             inverter_efficiency_curve=((10, 0.91), (100, 0.96)),
+            batt_inverter_efficiency_curve=DEFAULT_INVERTER_EFFICIENCY_CURVE,
             profile_mode="Experte",
             annual_kwh=None,
             profile_base=[100] * 24,
@@ -85,6 +87,7 @@ class TestSimulationParams:
             data_year=2015,
             inverter_limit_kw=0.8,
             inverter_efficiency_curve=((10, 0.91), (100, 0.96)),
+            batt_inverter_efficiency_curve=DEFAULT_INVERTER_EFFICIENCY_CURVE,
             profile_mode="Experte",
             annual_kwh=None,
             profile_base=[100] * 24,
@@ -124,6 +127,7 @@ class TestCalculateHourlyLoadExpert:
             data_year=2015,
             inverter_limit_kw=0.8,
             inverter_efficiency_curve=((10, 0.91), (100, 0.96)),
+            batt_inverter_efficiency_curve=DEFAULT_INVERTER_EFFICIENCY_CURVE,
             profile_mode="Experte",
             annual_kwh=None,
             profile_base=[100] * 24,

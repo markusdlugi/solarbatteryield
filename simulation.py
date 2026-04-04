@@ -42,11 +42,26 @@ class SimulationState:
         default_factory=lambda: DEFAULT_INVERTER_EFFICIENCY_CURVE
     )
     
+    # Battery inverter efficiency curve (AC-coupled only)
+    batt_inverter_efficiency_curve: tuple[tuple[int, float], ...] = field(
+        default_factory=lambda: DEFAULT_INVERTER_EFFICIENCY_CURVE
+    )
+    
     def get_inverter_efficiency(self, power_kw: float) -> float:
         """
-        Get inverter efficiency for current power level using the efficiency curve.
+        Get PV inverter efficiency for current power level.
         """
         return get_inverter_efficiency(power_kw, self.inv_cap, self.inverter_efficiency_curve)
+    
+    def get_batt_inverter_efficiency(self, power_kw: float, cap_kw: float) -> float:
+        """
+        Get battery inverter efficiency for current power level.
+        
+        Args:
+            power_kw: Current power through the battery inverter in kW
+            cap_kw: Battery capacity in kWh (used as rated power reference, 1C assumption)
+        """
+        return get_inverter_efficiency(power_kw, cap_kw, self.batt_inverter_efficiency_curve)
 
     def accumulate_result(self, result: HourlyResult) -> None:
         """Add hourly result values to running totals."""
@@ -208,7 +223,8 @@ def _process_hour_ac_coupled(
     """
     Process one hour with AC-coupled battery.
     
-    AC-coupled: inverter converts all PV to AC first, then battery charges from AC.
+    AC-coupled: inverter converts all PV to AC first, then battery charges from AC
+    through its own bidirectional inverter (batt_inv_eff).
     """
     inv_cap = state.inv_cap
     batt_eff = state.batt_eff
@@ -216,10 +232,10 @@ def _process_hour_ac_coupled(
     max_soc = state.max_soc
     soc = state.soc
     
-    # Get efficiency based on expected power through inverter
+    # Get PV inverter efficiency
     inv_eff = state.get_inverter_efficiency(min(gen_dc, inv_cap))
     
-    # Step 1: Convert DC to AC (limited by inverter)
+    # Step 1: Convert DC to AC (limited by PV inverter)
     dc_to_inverter = min(gen_dc, inv_cap / inv_eff)
     gen_ac = dc_to_inverter * inv_eff
     curtailed = gen_dc - dc_to_inverter
@@ -233,20 +249,26 @@ def _process_hour_ac_coupled(
     surplus = gen_ac - direct_pv
     deficit = load - direct_pv
     
-    # Handle surplus: charge battery, then feed in
+    # Handle surplus: charge battery (through battery inverter), then feed in
     feed_in = 0.0
     if surplus > 0:
-        charge = min(surplus, (max_soc - soc) / batt_eff) if cap_gross > 0 else 0
-        soc += charge * batt_eff
+        # Battery inverter efficiency for charging (AC → DC)
+        batt_inv_eff = state.get_batt_inverter_efficiency(surplus, cap_gross) if cap_gross > 0 else 1.0
+        combined_charge_eff = batt_inv_eff * batt_eff
+        charge = min(surplus, (max_soc - soc) / combined_charge_eff) if cap_gross > 0 else 0
+        soc += charge * combined_charge_eff
         feed_in = surplus - charge
     
-    # Handle deficit: discharge battery or import from grid
+    # Handle deficit: discharge battery (through battery inverter) or import from grid
     grid_import = 0.0
     battery_discharge = 0.0
     if deficit > 0:
-        discharge = min(deficit / batt_eff, max(0, soc - min_soc)) if cap_gross > 0 else 0
+        # Battery inverter efficiency for discharging (DC → AC)
+        batt_inv_eff = state.get_batt_inverter_efficiency(deficit, cap_gross) if cap_gross > 0 else 1.0
+        combined_discharge_eff = batt_eff * batt_inv_eff
+        discharge = min(deficit / combined_discharge_eff, max(0, soc - min_soc)) if cap_gross > 0 else 0
         soc -= discharge
-        battery_discharge = discharge * batt_eff
+        battery_discharge = discharge * combined_discharge_eff
         grid_import = deficit - battery_discharge
     
     # Update state
@@ -311,6 +333,7 @@ def simulate(
         batt_eff=1 - params.batt_loss_pct / 100,
         inv_cap=params.inverter_limit_kw if params.inverter_limit_kw is not None else float('inf'),
         inverter_efficiency_curve=params.inverter_efficiency_curve,
+        batt_inverter_efficiency_curve=params.batt_inverter_efficiency_curve,
     )
     
     # Select processing function based on coupling type

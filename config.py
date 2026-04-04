@@ -119,7 +119,7 @@ class ConfigDefaults:
     
     # PV System
     year: int = 2015
-    loss: int = 12  # System losses %
+    loss: int = 9  # System losses % (DC-side only, excludes inverter losses)
     inverter_efficiency_preset: str = "median"  # "pessimistic", "median", "optimistic", "custom"
     inverter_limit_enabled: bool = True
     inverter_limit_w: int = 800  # Watts
@@ -127,7 +127,8 @@ class ConfigDefaults:
     
     # Storage
     dc_coupled: str = "DC-gekoppelt"
-    batt_loss: int = 10  # Charge/discharge loss %
+    batt_loss: int = 5  # Cell charge/discharge loss %
+    batt_inverter_preset: str = "median"  # Battery inverter efficiency preset for AC-coupled
     min_soc_summer: int = 10  # Min SoC summer %
     max_soc_summer: int = 100  # Max SoC summer %
     min_soc_winter: int = 20  # Min SoC winter %
@@ -169,6 +170,7 @@ SESSION_STATE_DEFAULTS: dict[str, Any] = {
     "cfg_base_cost": DEFAULTS.base_cost,
     "cfg_dc_coupled": DEFAULTS.dc_coupled,
     "cfg_batt_loss": DEFAULTS.batt_loss,
+    "cfg_batt_inverter_preset": DEFAULTS.batt_inverter_preset,
     "cfg_min_soc_s": DEFAULTS.min_soc_summer,
     "cfg_max_soc_s": DEFAULTS.max_soc_summer,
     "cfg_min_soc_w": DEFAULTS.min_soc_winter,
@@ -191,7 +193,8 @@ PERSISTED_KEYS: list[str] = [
     "cfg_seasonal_enabled", "cfg_season_winter", "cfg_season_summer",
     "cfg_year", "cfg_loss", "cfg_inverter_limit_enabled", "cfg_inverter_limit_w",
     "cfg_base_cost", "cfg_dc_coupled", "cfg_inverter_efficiency_preset",
-    "cfg_batt_loss", "cfg_min_soc_s", "cfg_max_soc_s", "cfg_min_soc_w", "cfg_max_soc_w",
+    "cfg_batt_loss", "cfg_batt_inverter_preset",
+    "cfg_min_soc_s", "cfg_max_soc_s", "cfg_min_soc_w", "cfg_max_soc_w",
     "cfg_e_price", "cfg_e_inc", "cfg_feed_in_tariff", "cfg_etf_ret", "cfg_years",
 ]
 

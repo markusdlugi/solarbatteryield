@@ -116,7 +116,7 @@ class Report:
             .map(color_autarkie, subset=["Autarkie (%)"])
             .map(color_eigenverbrauch, subset=["Eigenverbr. (%)"])
             .map(color_vollzyklen, subset=["Vollzyklen/a"]),
-            use_container_width=True, hide_index=True,
+            width="stretch", hide_index=True,
         )
 
         if self.e_inc > 0:
@@ -235,7 +235,7 @@ class Report:
                     }
                 }
             ),
-            use_container_width=True,
+            width="stretch",
         )
         st.caption("📊 Balken = Verbrauchsdeckung (☀️ Direkt-PV, 🔋 Batterie, 🔵 Netzbezug) · "
                    "🟣 Einspeisung (negativ) · Gestrichelte Linie = Gesamtverbrauch")
@@ -282,7 +282,7 @@ class Report:
             .map(color_rendite, subset=["Rendite (%/a)"])
             .map(color_amort, subset=["Amortisation (a)"])
         )
-        st.dataframe(styled_incr, use_container_width=True, hide_index=True)
+        st.dataframe(styled_incr, width="stretch", hide_index=True)
         
         if self.e_inc > 0:
             st.caption(f"📌 Die Ersparnis (€/a) bezieht sich auf das 1. Jahr. Durch steigende Strompreise "
@@ -355,7 +355,7 @@ class Report:
                     }
                 }
             ),
-            use_container_width=True,
+            width="stretch",
         )
 
     def _render_scenario_details(self) -> None:
@@ -389,7 +389,7 @@ class Report:
                     .format(fmt)
                     .map(color_pos_neg, subset=["PV netto (EUR)", "PV - ETF (EUR)"])
                 )
-                st.dataframe(styled_detail, use_container_width=True, hide_index=True)
+                st.dataframe(styled_detail, width="stretch", hide_index=True)
 
     def _render_summary(self) -> None:
         """Render the final summary section."""
@@ -423,7 +423,7 @@ class Report:
             })
             .map(color_pos_neg, subset=["PV Gewinn (€)", "ETF Gewinn (€)", "Differenz (€)"])
         )
-        st.dataframe(styled_summary, use_container_width=True, hide_index=True)
+        st.dataframe(styled_summary, width="stretch", hide_index=True)
 
         best = max(summary_rows, key=lambda r: r["PV Gewinn (€)"])
         st.success(
@@ -453,18 +453,18 @@ def render_report(config: SimulationConfig, results: AnalysisResult) -> None:
 def render_missing_config_message(missing: list[str]) -> None:
     """Render message when required configuration is missing."""
     st.title("☀️ SolarBatterYield - PV-Analyse mit Speichervergleich")
+    st.markdown("Eine interaktive Streamlit-App zur Simulation und Wirtschaftlichkeitsanalyse von Photovoltaik-Anlagen mit Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlagen.")
+    missing_list = "\n".join(f"- {m}" for m in missing)
     st.info(
         "Bitte konfiguriere mindestens folgende Parameter in der **Seitenleiste** (⚙️), "
-        "um die Analyse zu starten:"
+        f"um die Analyse zu starten:\n\n{missing_list}"
     )
-    for m in missing:
-        st.markdown(f"- {m}")
 
     st.markdown("Nach Hinzufügen der erforderlichen Parameter wird ein Report mit Standardwerten generiert. "
                 "Er verwendet ein beispielhaftes System, bestehend aus:")
-    st.markdown("- ☀️ PV-Module mit 2kWp Leistung in Südausrichtung")
-    st.markdown("- 🔋️ drei unterschiedliche Speicherkonfigurationen mit bis zu 6kWh")
-    st.markdown("Du kannst diese erweitern, ändern, löschen oder zusätzliche Einstellungen anpassen - "
+    st.markdown("- ☀️ PV-Modulen mit 2kWp Leistung in Südausrichtung")
+    st.markdown("- 🔋️ drei unterschiedlichen Speicherkonfigurationen mit bis zu 6kWh")
+    st.markdown("Du kannst diese beliebig erweitern, ändern, löschen oder zusätzliche Einstellungen anpassen - "
                 "der Report wird automatisch aktualisiert.")
     st.divider()
     st.caption(

@@ -108,7 +108,7 @@ class ConsumptionConfig:
 class PVSystemConfig:
     """PV system configuration."""
     data_year: int = 2015
-    system_loss: int = 12  # System losses in %
+    system_loss: int = 9  # System losses in % (DC-side only, excludes inverter losses)
     inverter_limit_enabled: bool = True
     inverter_limit_w: int = 800  # Inverter limit in Watts
     feed_in_tariff: float = 0.0  # Feed-in tariff in ct/kWh
@@ -133,17 +133,26 @@ class PVSystemConfig:
 class StorageConfig:
     """Battery storage configuration."""
     dc_coupled: bool = True
-    batt_loss: int = 10  # Charge/discharge loss in %
+    batt_loss: int = 5  # Cell charge/discharge loss in % (excludes inverter losses)
     min_soc_summer: int = 10  # Min SoC summer in %
     max_soc_summer: int = 100  # Max SoC summer in %
     min_soc_winter: int = 20  # Min SoC winter in %
     max_soc_winter: int = 100  # Max SoC winter in %
     options: list[StorageOption] = field(default_factory=list)
     
+    # Battery inverter efficiency (AC-coupled only)
+    # The battery's own bidirectional inverter for AC/DC conversion
+    # Options: "pessimistic", "median", "optimistic", "custom"
+    batt_inverter_preset: str = "median"
+    batt_inverter_efficiency_custom: list[float] = field(default_factory=list)
+    
     def __post_init__(self) -> None:
-        """Validate storage configuration."""
+        """Validate storage configuration and initialize defaults."""
         if not 0 <= self.batt_loss <= 50:
             raise ValueError(f"Batterieverluste müssen zwischen 0% und 50% liegen, war {self.batt_loss}%")
+        
+        if not self.batt_inverter_efficiency_custom:
+            self.batt_inverter_efficiency_custom = list(DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT)
         
         for season, min_soc, max_soc in [
             ("Sommer", self.min_soc_summer, self.max_soc_summer),
@@ -187,7 +196,10 @@ class SimulationParams:
     # Inverter
     data_year: int
     inverter_limit_kw: float | None
-    inverter_efficiency_curve: tuple[tuple[int, float], ...]  # Power-dependent efficiency curve
+    inverter_efficiency_curve: tuple[tuple[int, float], ...]  # PV inverter efficiency curve
+    
+    # Battery inverter (AC-coupled only)
+    batt_inverter_efficiency_curve: tuple[tuple[int, float], ...]  # Battery inverter efficiency curve
     
     # Consumption profile mode
     profile_mode: str  # "Einfach", "Erweitert", or "Experte"
@@ -244,6 +256,7 @@ class SimulationParams:
             data_year=config.pv_system.data_year,
             inverter_limit_kw=config.inverter_limit_kw,
             inverter_efficiency_curve=config.get_inverter_efficiency_curve(),
+            batt_inverter_efficiency_curve=config.get_batt_inverter_efficiency_curve(),
             profile_mode=config.consumption.profile_mode,
             annual_kwh=config.consumption.annual_kwh,
             profile_base=config.consumption.active_base,
@@ -298,26 +311,50 @@ class SimulationConfig:
         """Get total peak power of all modules."""
         return sum(m.peak for m in self.pv_system.modules)
     
-    def get_inverter_efficiency_curve(self) -> tuple[tuple[int, float], ...]:
+    @staticmethod
+    def _build_efficiency_curve(
+        preset: str,
+        custom_values: list[float] | None = None,
+    ) -> tuple[tuple[int, float], ...]:
         """
-        Get the inverter efficiency curve based on preset or custom values.
+        Build an efficiency curve from preset name or custom values.
         
-        Returns a tuple of (power_level_percent, efficiency) pairs.
+        Args:
+            preset: One of "pessimistic", "median", "optimistic", or "custom"
+            custom_values: List of efficiency percentages at power levels [10%, 20%, 30%, 50%, 75%, 100%]
+        
+        Returns:
+            Tuple of (power_level_percent, efficiency) pairs.
         """
-        preset = self.pv_system.inverter_efficiency_preset
-        
-        if preset == "custom":
-            # Build curve from custom values
+        if preset == "custom" and custom_values:
             power_levels = [10, 20, 30, 50, 75, 100]
-            custom = self.pv_system.inverter_efficiency_custom
             return tuple(
-                (level, eff / 100) 
-                for level, eff in zip(power_levels, custom)
+                (level, eff / 100)
+                for level, eff in zip(power_levels, custom_values)
             )
         elif preset in INVERTER_EFFICIENCY_CURVES:
             return INVERTER_EFFICIENCY_CURVES[preset]
         else:
             return DEFAULT_INVERTER_EFFICIENCY_CURVE
+    
+    def get_inverter_efficiency_curve(self) -> tuple[tuple[int, float], ...]:
+        """Get the PV inverter efficiency curve based on preset or custom values."""
+        return self._build_efficiency_curve(
+            self.pv_system.inverter_efficiency_preset,
+            self.pv_system.inverter_efficiency_custom,
+        )
+    
+    def get_batt_inverter_efficiency_curve(self) -> tuple[tuple[int, float], ...]:
+        """
+        Get the battery inverter efficiency curve (AC-coupled only).
+        
+        For DC-coupled systems this curve is not used in simulation, but we
+        still return a valid curve for consistency.
+        """
+        return self._build_efficiency_curve(
+            self.storage.batt_inverter_preset,
+            self.storage.batt_inverter_efficiency_custom,
+        )
     
     def is_valid(self) -> tuple[bool, list[str]]:
         """Check if configuration is valid for simulation."""

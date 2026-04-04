@@ -109,14 +109,15 @@ def _render_consumption_section() -> None:
             st.caption("📊 Das BDEW H0-Standardlastprofil berücksichtigt automatisch "
                       "unterschiedliche Verbräuche an Werktagen, Samstagen und Sonn-/Feiertagen "
                       "sowie saisonale Unterschiede.")
+            _render_flex_load_settings()
+            _render_periodic_load_settings()
         elif current_mode == "Erweitert":
             _render_advanced_profile_settings()
             _render_seasonal_settings()
+            _render_flex_load_settings()
+            _render_periodic_load_settings()
         else:  # Experte
             _render_expert_profile_settings()
-
-        _render_flex_load_settings()
-        _render_periodic_load_settings()
 
 
 def _render_advanced_profile_settings() -> None:
@@ -143,7 +144,7 @@ def _render_advanced_profile_settings() -> None:
             })
             edited_df = st.data_editor(
                 profile_df, disabled=["Stunde"], hide_index=True,
-                use_container_width=True, key="profile_editor_weekday",
+                width="stretch", key="profile_editor_weekday",
             )
             new_values = edited_df["Verbrauch (W)"].tolist()
             if new_values != st.session_state._active_base:
@@ -161,7 +162,7 @@ def _render_advanced_profile_settings() -> None:
             })
             edited_sat_df = st.data_editor(
                 profile_sat_df, disabled=["Stunde"], hide_index=True,
-                use_container_width=True, key="profile_editor_saturday",
+                width="stretch", key="profile_editor_saturday",
             )
             new_sat_values = edited_sat_df["Verbrauch (W)"].tolist()
             if new_sat_values != st.session_state._profile_saturday:
@@ -179,7 +180,7 @@ def _render_advanced_profile_settings() -> None:
             })
             edited_sun_df = st.data_editor(
                 profile_sun_df, disabled=["Stunde"], hide_index=True,
-                use_container_width=True, key="profile_editor_sunday",
+                width="stretch", key="profile_editor_sunday",
             )
             new_sun_values = edited_sun_df["Verbrauch (W)"].tolist()
             if new_sun_values != st.session_state._profile_sunday:
@@ -193,7 +194,7 @@ def _render_advanced_profile_settings() -> None:
         })
         edited_df = st.data_editor(
             profile_df, disabled=["Stunde"], hide_index=True,
-            use_container_width=True, key="profile_editor",
+            width="stretch", key="profile_editor",
         )
         new_values = edited_df["Verbrauch (W)"].tolist()
         if new_values != st.session_state._active_base:
@@ -389,7 +390,7 @@ def _render_flex_load_settings() -> None:
         })
         edited_flex = st.data_editor(
             flex_df, disabled=["Stunde"], hide_index=True,
-            use_container_width=True, key="flex_editor",
+            width="stretch", key="flex_editor",
         )
         new_flex = edited_flex["Δ Last (W)"].tolist()
         if new_flex != st.session_state._flex_delta:
@@ -433,7 +434,7 @@ def _render_periodic_load_settings() -> None:
         })
         edited_periodic = st.data_editor(
             periodic_df, disabled=["Stunde"], hide_index=True,
-            use_container_width=True, key="periodic_editor",
+            width="stretch", key="periodic_editor",
         )
         new_periodic = edited_periodic["Δ Last (W)"].tolist()
         if new_periodic != st.session_state._periodic_delta:
@@ -529,7 +530,7 @@ def _render_custom_efficiency_editor() -> None:
         eff_df,
         disabled=["Leistung (%)"],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         key="inverter_eff_editor",
         column_config={
             "Wirkungsgrad (%)": st.column_config.NumberColumn(
@@ -605,28 +606,105 @@ def _render_storage_section() -> None:
             "Speicheranbindung", _coupling_options, horizontal=True,
             index=_coupling_options.index(sv("cfg_dc_coupled")),
             key="cfg_dc_coupled",
-            help="**DC-gekoppelt**: Batterie lädt ohne Limit direkt von den Panels - "
+            help="**DC-gekoppelt**: Batterie lädt ohne Limit direkt von den Panels – "
                  "Wechselrichter-Limit gilt nur für die AC-Seite. "
-                 "**AC-gekoppelt**: Batterie lädt mit Limit von AC – "
+                 "**AC-gekoppelt**: Batterie lädt von AC über eigenen Batterie-WR – "
                  "Wechselrichter-Limit begrenzt den gesamten PV-Ertrag."
         )
-        st.slider("Lade-/Entladeverluste (%)", LIMITS.batt_loss_min, LIMITS.batt_loss_max, 
+
+        # Battery inverter efficiency (AC-coupled only)
+        if sv("cfg_dc_coupled") == "AC-gekoppelt":
+            _render_batt_inverter_efficiency_section()
+
+        st.slider("Zellverluste Laden/Entladen (%)", LIMITS.batt_loss_min, LIMITS.batt_loss_max,
                   key="cfg_batt_loss",
+                  help="Verluste in den Batteriezellen beim Laden und Entladen. "
+                       "Verlust wird bei jedem der beiden Prozesse in der angegebenen Höhe berechnet. "
+                       "Wechselrichterverluste werden separat berechnet.",
                   **widget_value("cfg_batt_loss"))
-        st.slider("Min. Ladezustand Sommer (%)", LIMITS.soc_min, LIMITS.soc_max, 
+        
+        st.slider("Min. Ladezustand Sommer (%)", LIMITS.soc_min, LIMITS.soc_max,
                   key="cfg_min_soc_s",
                   **widget_value("cfg_min_soc_s"))
-        st.slider("Max. Ladezustand Sommer (%)", LIMITS.soc_min, LIMITS.soc_max, 
+        st.slider("Max. Ladezustand Sommer (%)", LIMITS.soc_min, LIMITS.soc_max,
                   key="cfg_max_soc_s",
                   **widget_value("cfg_max_soc_s"))
-        st.slider("Min. Ladezustand Winter (%)", LIMITS.soc_min, LIMITS.soc_max, 
+        st.slider("Min. Ladezustand Winter (%)", LIMITS.soc_min, LIMITS.soc_max,
                   key="cfg_min_soc_w",
                   **widget_value("cfg_min_soc_w"))
-        st.slider("Max. Ladezustand Winter (%)", LIMITS.soc_min, LIMITS.soc_max, 
+        st.slider("Max. Ladezustand Winter (%)", LIMITS.soc_min, LIMITS.soc_max,
                   key="cfg_max_soc_w",
                   **widget_value("cfg_max_soc_w"))
         st.divider()
         _render_storages_config()
+
+
+def _render_batt_inverter_efficiency_section() -> None:
+    """Render battery inverter efficiency curve selection (AC-coupled only)."""
+    _preset_options = {
+        "pessimistic": "🔻 Pessimistisch (P10)",
+        "median": "📊 Durchschnittlich (P50)",
+        "optimistic": "🔺 Optimistisch (P90)",
+        "custom": "⚙️ Benutzerdefiniert",
+    }
+    
+    if "cfg_batt_inverter_preset" not in st.session_state:
+        st.session_state.cfg_batt_inverter_preset = "median"
+    
+    current_preset = sv("cfg_batt_inverter_preset")
+    preset_index = list(_preset_options.keys()).index(current_preset) if current_preset in _preset_options else 1
+    
+    st.selectbox(
+        "📈 Batterie-WR-Wirkungsgradkurve",
+        options=list(_preset_options.keys()),
+        format_func=lambda x: _preset_options[x],
+        index=preset_index,
+        key="cfg_batt_inverter_preset",
+        help="Wirkungsgrad des bidirektionalen Batterie-Wechselrichters (AC↔DC). "
+             "Wird nur bei AC-gekoppelten Speichern benötigt. "
+             "Bei DC-gekoppelten Speichern wird der PV-Wechselrichter verwendet.",
+    )
+    
+    if sv("cfg_batt_inverter_preset") == "custom":
+        _render_batt_inverter_custom_editor()
+    else:
+        _show_efficiency_curve_info(sv("cfg_batt_inverter_preset"))
+
+
+def _render_batt_inverter_custom_editor() -> None:
+    """Render the custom battery inverter efficiency curve editor."""
+    if "_batt_inverter_eff_custom" not in st.session_state:
+        st.session_state._batt_inverter_eff_custom = list(DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT)
+    
+    st.caption("Batterie-WR-Wirkungsgrad (%) bei verschiedenen Leistungsstufen")
+    
+    power_levels = [10, 20, 30, 50, 75, 100]
+    
+    eff_df = pd.DataFrame({
+        "Leistung (%)": [f"{p}%" for p in power_levels],
+        "Wirkungsgrad (%)": st.session_state._batt_inverter_eff_custom,
+    })
+    
+    edited_eff = st.data_editor(
+        eff_df,
+        disabled=["Leistung (%)"],
+        hide_index=True,
+        width="stretch",
+        key="batt_inverter_eff_editor",
+        column_config={
+            "Wirkungsgrad (%)": st.column_config.NumberColumn(
+                min_value=70.0,
+                max_value=100.0,
+                step=0.1,
+                format="%.2f",
+            ),
+        },
+    )
+    
+    new_values = edited_eff["Wirkungsgrad (%)"].tolist()
+    if new_values != st.session_state._batt_inverter_eff_custom:
+        st.session_state._batt_inverter_eff_custom = new_values
+        st.rerun()
 
 
 def _render_storages_config() -> None:
@@ -683,4 +761,3 @@ def _render_prices_section() -> None:
         st.slider("Analyse-Horizont (Jahre)", LIMITS.years_min, LIMITS.years_max, 
                   key="cfg_years",
                   **widget_value("cfg_years"))
-

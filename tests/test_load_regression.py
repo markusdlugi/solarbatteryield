@@ -146,6 +146,7 @@ def _make_sim_params_from_config() -> SimulationParams:
         data_year=2015,
         inverter_limit_kw=0.8,  # 800 W
         inverter_efficiency_curve=INVERTER_EFFICIENCY_CURVES["median"],
+        batt_inverter_efficiency_curve=INVERTER_EFFICIENCY_CURVES["median"],
         profile_mode="Erweitert",
         annual_kwh=2821,
         profile_base=[

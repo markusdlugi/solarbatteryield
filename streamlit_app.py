@@ -144,6 +144,8 @@ def get_config() -> SimulationConfig:
         storage=StorageConfig(
             dc_coupled=sv("cfg_dc_coupled") == "DC-gekoppelt",
             batt_loss=sv("cfg_batt_loss"),
+            batt_inverter_preset=sv("cfg_batt_inverter_preset"),
+            batt_inverter_efficiency_custom=st.session_state.get("_batt_inverter_eff_custom", []),
             min_soc_summer=sv("cfg_min_soc_s"),
             max_soc_summer=sv("cfg_max_soc_s"),
             min_soc_winter=sv("cfg_min_soc_w"),

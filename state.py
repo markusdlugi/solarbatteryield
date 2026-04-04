@@ -37,8 +37,12 @@ def encode_config() -> str:
     if st.session_state.get("cfg_inverter_efficiency_preset") == "custom":
         if "_inverter_eff_custom" in st.session_state:
             data["_inverter_eff_custom"] = st.session_state._inverter_eff_custom
+    # Add custom battery inverter efficiency curve if using custom preset
+    if st.session_state.get("cfg_batt_inverter_preset") == "custom":
+        if "_batt_inverter_eff_custom" in st.session_state:
+            data["_batt_inverter_eff_custom"] = st.session_state._batt_inverter_eff_custom
     # Add version for future compatibility
-    data["_version"] = 3
+    data["_version"] = 4
     raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     compressed = zlib.compress(raw, level=9)
     return base64.urlsafe_b64encode(compressed).decode("ascii")
@@ -78,6 +82,9 @@ def decode_config(encoded: str) -> None:
     # Restore custom inverter efficiency curve (version 3+)
     if "_inverter_eff_custom" in data:
         st.session_state._inverter_eff_custom = data["_inverter_eff_custom"]
+    # Restore custom battery inverter efficiency curve (version 4+)
+    if "_batt_inverter_eff_custom" in data:
+        st.session_state._batt_inverter_eff_custom = data["_batt_inverter_eff_custom"]
 
 
 def init_session_state() -> None:
