@@ -7,7 +7,7 @@ Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlag
 
 ## Features
 
-- **PVGIS-Integration** – Stündliche PV-Ertragsdaten direkt von der EU-Datenbank (2005–2023)
+- **PVGIS-Integration** – Stündliche PV-Ertragsdaten direkt von der EU-Datenbank (2005–2020)
 - **Standortsuche** – Koordinaten per Ortsname via OpenStreetMap Nominatim
 - **Flexible PV-Konfiguration** – Beliebig viele Module mit individueller Leistung, Ausrichtung und Neigung
 - **Wechselrichter-Limit** – 800 W Standard (Balkonkraftwerk), deaktivierbar für größere Anlagen
@@ -16,36 +16,19 @@ Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlag
     - Drei Voreinstellungen: Pessimistisch (P10), Median (P50), Optimistisch (P90)
     - Optional: Eigene Wirkungsgradkurve für Experten
 - **DC- und AC-gekoppelte Speicher** – Korrekte Simulation beider Anbindungsarten:
-    - **DC-gekoppelt**: Batterie lädt direkt vom DC-Bus, Wechselrichter-Limit gilt nur für die AC-Seite
-    - **AC-gekoppelt**: Wechselrichter begrenzt den gesamten PV-Ertrag
+    - **DC-gekoppelt**: Batterie lädt direkt von den PV-Modulen, Wechselrichter-Limit gilt nur für die AC-Seite
+    - **AC-gekoppelt**: Wechselrichter begrenzt den gesamten PV-Ertrag, eigener Wechselrichter für die Batterie möglich
 - **BDEW H0-Standardlastprofil** – Realistisches Lastprofil mit Unterscheidung nach:
     - Werktagen, Samstagen und Sonn-/Feiertagen
     - Jahreszeiten (Winter, Frühling, Sommer, Herbst)
     - Deutsche Feiertage werden automatisch berücksichtigt
 - **Erweiterter Verbrauchsmodus** – Eigene stündliche Lastprofile mit optionaler Tagtyp-Differenzierung
 - **Lastverschiebung** – Optionale Zusatzlast an ertragreichen Sonnentagen (z. B. Waschmaschine)
-- **Periodische Zusatzlast** – Regelmäßiger Verbrauch unabhängig vom Wetter (z. B. Warmwasser)
+- **Periodische Zusatzlast** – Regelmäßiger Verbrauch unabhängig vom Wetter (z. B. Warmwasser-Desinfektion)
 - **Einspeisevergütung** – Berücksichtigung der Vergütung in allen Wirtschaftlichkeitsberechnungen
 - **Mehrere Speicher-Szenarien** – Vergleich von „Ohne Speicher" bis zu beliebig vielen Batterie-Optionen
 - **Langzeitvergleich PV vs. ETF** – Kumulierte Rendite über konfigurierbare Laufzeit
 - **Konfiguration teilen** – Alle Parameter als komprimierter URL-Parameter
-
-## Schnellstart
-
-```bash
-# Install uv (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install dependencies and run
-uv sync
-uv run streamlit run src/solarbatteryield/streamlit_app.py
-```
-
-### Voraussetzungen
-
-- [uv](https://docs.astral.sh/uv/) (empfohlen) oder pip
-- Python ≥ 3.11
-- Internetverbindung (für PVGIS- und Geocoding-Abfragen)
 
 ## Bedienung
 
@@ -99,13 +82,13 @@ Stundenlast z. B. bei 300 W und die PV bei 400 W, scheint die Last vollständig 
 Verbrauch innerhalb der Stunde erheblich – zeitweise deutlich unter und zeitweise über der PV-Leistung. Gerade bei
 Balkonkraftwerken mit niedrigem Wechselrichter-Limit (z. B. 800 W) führt das zu spürbaren Abweichungen.
 
-Um dies zu korrigieren, wird für jede Simulationsstunde der durchschnittliche Verbrauch in eine *
-*Wahrscheinlichkeitsdichtefunktion** (PDF) der momentanen Leistungsaufnahme überführt (50-W-Bins, 0–4.950 W). Für jedes
+Um dies zu korrigieren, wird für jede Simulationsstunde der durchschnittliche Verbrauch in eine
+**Wahrscheinlichkeitsdichtefunktion** (PDF) der momentanen Leistungsaufnahme überführt (50-W-Bins, 0–4.950 W). Für jedes
 Leistungsintervall wird der Anteil der PV-Erzeugung berechnet, der die momentane Last decken kann. Die gewichtete Summe
 über alle Intervalle ergibt den realistischen Direkt-PV-Anteil. Dadurch können innerhalb einer Stunde sowohl
 Überschuss (Einspeisung / Batterieladung) als auch Defizit (Netzbezug / Batterieentladung) gleichzeitig auftreten.
 
-Die vorberechneten Verteilungen (0–3.450 W) stammen aus gemessenen Sekundenlastprofilen von 38 deutschen
+Die vorberechneten Verteilungen (0–3.450 W) stammen aus gemessenen Minutenlastprofilen von 38 deutschen
 Einfamilienhäusern. Für höhere Lasten wird eine synthetische bimodale Gaußverteilung erzeugt.
 
 ## Wirtschaftlichkeitsrechnung
@@ -123,14 +106,14 @@ automatisch wiederhergestellt.
 
 ## Datenquellen
 
-| Dienst oder Datenquelle                                                                                   | Zweck                                       | Anbieter                                               |
-|-----------------------------------------------------------------------------------------------------------|---------------------------------------------|--------------------------------------------------------|
-| [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/)                                                        | Stündliche PV-Ertragsdaten                  | European Commission Joint Research Center (JRC)        |
+| Dienst oder Datenquelle                                                                                   | Zweck                                       | Anbieter                                                                                                                    |
+|-----------------------------------------------------------------------------------------------------------|---------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/)                                                        | Stündliche PV-Ertragsdaten                  | European Commission Joint Research Center (JRC)                                                                             |
 | [Nominatim](https://nominatim.openstreetmap.org/)                                                         | Geocoding (Ortssuche → Koordinaten)         | © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, [ODbL](https://opendatacommons.org/licenses/odbl/) |
-| [BDEW H0-Profil](https://www.bdew.de/energie/standardlastprofile-strom/)                                  | Standard-Lastprofil für Haushalte           | Bundesverband der Energie- und Wasserwirtschaft (BDEW) |
-| [CEC Solar Equipment Lists](https://www.energy.ca.gov/programs-and-topics/programs/solar-equipment-lists) | Lastabhängige Wirkungsgradkurven            | California Energy Commission (CEC)                     |
-| [PVTools](https://github.com/nick81nrw/PVTools) (MIT License)                                             | Sub-stündliche Lastregressionsverteilungen  | nick81nrw                                              |
-| [Schlemminger et al. 2022](https://doi.org/10.1038/s41597-022-01156-1)                                    | Gemessene Minutenlastprofile (38 Haushalte) | ISFH / *Scientific Data*                               |
+| [BDEW H0-Profil](https://www.bdew.de/energie/standardlastprofile-strom/)                                  | Standard-Lastprofil für Haushalte           | Bundesverband der Energie- und Wasserwirtschaft (BDEW)                                                                      |
+| [CEC Solar Equipment Lists](https://www.energy.ca.gov/programs-and-topics/programs/solar-equipment-lists) | Lastabhängige Wirkungsgradkurven            | California Energy Commission (CEC)                                                                                          |
+| [PVTools](https://github.com/nick81nrw/PVTools) (MIT License)                                             | Sub-stündliche Lastregressionsverteilungen  | nick81nrw                                                                                                                   |
+| [Schlemminger et al. 2022](https://doi.org/10.1038/s41597-022-01156-1)                                    | Gemessene Minutenlastprofile (38 Haushalte) | ISFH / *Scientific Data*                                                                                                    |
 
 Das BDEW H0-Standardlastprofil stammt aus der offiziellen Veröffentlichung "Repräsentative VDEW-Lastprofile" (1999) des
 Bundesverbands der Energie- und Wasserwirtschaft. Die 15-Minuten-Werte werden zu stündlichen Mittelwerten aggregiert.
@@ -158,9 +141,9 @@ License, Copyright © 2023 nick81nrw) durchgeführt und als `regression.json` ve
 
 Dieses Projekt steht unter der [MIT License](LICENSE).
 
-## Development
+## Entwicklung
 
-### Project Structure
+### Projektstruktur
 
 ```
 solarbatteryield/
@@ -185,9 +168,10 @@ solarbatteryield/
 git clone https://github.com/your-username/solarbatteryield.git
 cd solarbatteryield
 uv sync --dev
+uv run streamlit run src/solarbatteryield/streamlit_app.py
 ```
 
-### Running Tests
+### Tests ausführen
 
 ```bash
 # Run all tests
@@ -197,9 +181,10 @@ uv run pytest
 uv run pytest tests/test_simulation.py -v
 ```
 
-### Updating Snapshots
+### Aktualisieren der Snapshots
 
-After intentional changes to simulation logic, update the snapshot tests:
+Nach Änderungen an der Simulationslogik oder den Ausgabeformaten müssen die Snapshot-Tests aktualisiert werden, um die
+neuen erwarteten Ergebnisse zu reflektieren. Dies geschieht mit dem `--snapshot-update` Flag:
 
 ```bash
 uv run pytest tests/test_snapshots.py --snapshot-update
