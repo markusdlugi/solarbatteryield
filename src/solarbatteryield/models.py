@@ -23,6 +23,33 @@ class HourlyResult:
     consumption: float
 
 
+@dataclass(frozen=True, slots=True)
+class HourlySoCData:
+    """Hourly state of charge and PV generation data for detailed analysis."""
+    hour: int  # Hour index within the week (0-167)
+    soc: float  # State of charge in kWh
+    soc_pct: float  # State of charge as percentage (0-100)
+    pv_generation: float  # PV generation in kWh
+    consumption: float  # Consumption in kWh
+
+
+@dataclass
+class WeeklyHourlyData:
+    """
+    Hourly data for a representative week (168 hours).
+    Used for SoC visualization in summer vs winter comparison.
+    """
+    hours: list[HourlySoCData] = field(default_factory=list)
+    
+    def add_hour(self, hour: int, soc: float, soc_pct: float, 
+                 pv_generation: float, consumption: float) -> None:
+        """Add data for one hour."""
+        self.hours.append(HourlySoCData(
+            hour=hour, soc=soc, soc_pct=soc_pct,
+            pv_generation=pv_generation, consumption=consumption
+        ))
+
+
 @dataclass
 class PVModule:
     """Configuration for a single PV module/panel."""
@@ -111,7 +138,6 @@ class PVSystemConfig:
     system_loss: int = 9  # System losses in % (DC-side only, excludes inverter losses)
     inverter_limit_enabled: bool = True
     inverter_limit_w: int = 800  # Inverter limit in Watts
-    feed_in_tariff: float = 0.0  # Feed-in tariff in ct/kWh
     base_cost: int = 800  # Base system cost in EUR
     modules: list[PVModule] = field(default_factory=list)
     
@@ -133,11 +159,11 @@ class PVSystemConfig:
 class StorageConfig:
     """Battery storage configuration."""
     dc_coupled: bool = True
-    batt_loss: int = 5  # Cell charge/discharge loss in % (excludes inverter losses)
-    min_soc_summer: int = 10  # Min SoC summer in %
-    max_soc_summer: int = 100  # Max SoC summer in %
-    min_soc_winter: int = 20  # Min SoC winter in %
-    max_soc_winter: int = 100  # Max SoC winter in %
+    batt_loss: int = 7  # Cell charge/discharge loss in % (excludes inverter losses)
+    min_soc_summer: int = 10  # Min. SoC summer in %
+    max_soc_summer: int = 100  # Max. SoC summer in %
+    min_soc_winter: int = 20  # Min. SoC winter in %
+    max_soc_winter: int = 100  # Max. SoC winter in %
     options: list[StorageOption] = field(default_factory=list)
     
     # Battery inverter efficiency (AC-coupled only)
@@ -171,6 +197,7 @@ class EconomicsConfig:
     """Economic parameters for analysis."""
     e_price: float = 0.27  # Electricity price in EUR/kWh
     e_inc: float = 0.03  # Annual price increase (decimal)
+    feed_in_tariff: float = 0.0  # Feed-in tariff in ct/kWh
     etf_ret: float = 0.07  # Annual ETF return (decimal)
     analysis_years: int = 15  # Analysis horizon in years
     
@@ -304,7 +331,7 @@ class SimulationConfig:
     @property
     def feed_in_tariff_eur(self) -> float:
         """Get feed-in tariff in EUR/kWh."""
-        return self.pv_system.feed_in_tariff / 100
+        return self.economics.feed_in_tariff / 100
     
     @property
     def total_peak_kwp(self) -> float:
@@ -397,7 +424,7 @@ class MonthlyData:
         self.consumption += result.consumption
 
 
-@dataclass(frozen=True)
+@dataclass
 class SimulationResult:
     """Result of a single simulation run."""
     grid_import: float  # Total grid import (kWh)
@@ -406,6 +433,12 @@ class SimulationResult:
     curtailed: float  # Total curtailed energy (kWh)
     monthly: dict[int, MonthlyData]  # Monthly breakdown
     full_cycles: float = 0.0  # Number of full battery cycles per year
+    
+    # Weekly SoC data for detailed visualization (optional)
+    # First week of July (summer), January (winter), and April (transition)
+    weekly_summer: WeeklyHourlyData | None = None
+    weekly_winter: WeeklyHourlyData | None = None
+    weekly_transition: WeeklyHourlyData | None = None
 
 
 @dataclass

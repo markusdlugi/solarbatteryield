@@ -489,12 +489,12 @@ class TestFlexibleLoad:
         expected = base_consumption + flex_consumption
         assert result.total_consumption == pytest.approx(expected, rel=0.01)
 
-    def test_should_refresh_pool_on_non_flex_days(self):
-        """Should increase flex pool on days when flex is not used."""
+    def test_should_refresh_pool_every_day(self):
+        """Should increase flex pool daily regardless of flex usage."""
         # given
         flex_delta = [500] * 24
         pool_size = 2
-        refresh_rate = 1.0  # Fully refresh 1 use per non-flex day
+        refresh_rate = 1.0  # Fully refresh 1 use per day
         
         params = _create_base_params(
             flex_load_enabled=True,
@@ -587,6 +587,96 @@ class TestPeriodicLoad:
         extra_every_day = result_every_day.total_consumption - base_consumption
         extra_every_third = result_every_third.total_consumption - base_consumption
         assert extra_every_third == pytest.approx(extra_every_day / 3, rel=0.1)
+
+
+class TestWeeklySoCData:
+    """Tests for weekly SoC data collection."""
+
+    def test_should_collect_weekly_data_with_battery(self):
+        """Weekly SoC data should be collected when battery capacity > 0."""
+        # given
+        params = _create_base_params()
+        pv_data = _create_daytime_pv(peak_kw=1.0)
+        cap_gross = 5.0
+
+        # when
+        result = simulate(pv_data, cap_gross, params)
+
+        # then
+        assert result.weekly_summer is not None
+        assert result.weekly_winter is not None
+        assert result.weekly_transition is not None
+        assert len(result.weekly_summer.hours) == 168  # 7 days * 24 hours
+        assert len(result.weekly_winter.hours) == 168
+        assert len(result.weekly_transition.hours) == 168
+
+    def test_should_not_collect_weekly_data_without_battery(self):
+        """Weekly SoC data should not be collected when battery capacity = 0."""
+        # given
+        params = _create_base_params()
+        pv_data = _create_daytime_pv(peak_kw=1.0)
+        cap_gross = 0.0
+
+        # when
+        result = simulate(pv_data, cap_gross, params)
+
+        # then
+        assert result.weekly_summer is None
+        assert result.weekly_winter is None
+        assert result.weekly_transition is None
+
+    def test_weekly_data_should_have_valid_soc_percentages(self):
+        """SoC percentages should be between 0 and 100."""
+        # given
+        params = _create_base_params()
+        pv_data = _create_daytime_pv(peak_kw=1.0)
+        cap_gross = 5.0
+
+        # when
+        result = simulate(pv_data, cap_gross, params)
+
+        # then
+        for hourly_data in result.weekly_summer.hours:
+            assert 0 <= hourly_data.soc_pct <= 100
+        for hourly_data in result.weekly_winter.hours:
+            assert 0 <= hourly_data.soc_pct <= 100
+        for hourly_data in result.weekly_transition.hours:
+            assert 0 <= hourly_data.soc_pct <= 100
+
+    def test_weekly_data_should_track_pv_generation(self):
+        """Weekly data should include PV generation values."""
+        # given
+        params = _create_base_params()
+        pv_data = _create_daytime_pv(peak_kw=1.0)
+        cap_gross = 5.0
+
+        # when
+        result = simulate(pv_data, cap_gross, params)
+
+        # then
+        # Check summer data has higher PV than winter (hours 6-18 should have PV)
+        summer_pv_total = sum(h.pv_generation for h in result.weekly_summer.hours)
+        winter_pv_total = sum(h.pv_generation for h in result.weekly_winter.hours)
+        # With constant daytime PV, both should be equal
+        assert summer_pv_total > 0
+        assert winter_pv_total > 0
+
+    def test_weekly_hour_indices_should_be_sequential(self):
+        """Hour indices should run from 0 to 167."""
+        # given
+        params = _create_base_params()
+        pv_data = _create_daytime_pv(peak_kw=1.0)
+        cap_gross = 5.0
+
+        # when
+        result = simulate(pv_data, cap_gross, params)
+
+        # then
+        expected_hours = list(range(168))
+        actual_hours_summer = [h.hour for h in result.weekly_summer.hours]
+        actual_hours_winter = [h.hour for h in result.weekly_winter.hours]
+        assert actual_hours_summer == expected_hours
+        assert actual_hours_winter == expected_hours
 
 
 if __name__ == "__main__":

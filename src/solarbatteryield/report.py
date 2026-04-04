@@ -60,6 +60,7 @@ class Report:
         self._render_header()
         self._render_scenario_overview()
         self._render_monthly_energy_balance()
+        self._render_weekly_soc_comparison()
         self._render_incremental_analysis()
         self._render_longterm_comparison()
         self._render_scenario_details()
@@ -197,7 +198,7 @@ class Report:
 
         zero = (
             alt.Chart(pd.DataFrame({"y": [0]}))
-            .mark_rule(color="gray", strokeWidth=1)
+            .mark_rule(color=COLORS.zero_line, strokeWidth=1)
             .encode(y="y:Q")
         )
 
@@ -240,13 +241,254 @@ class Report:
         st.caption("📊 Balken = Verbrauchsdeckung (☀️ Direkt-PV, 🔋 Batterie, 🔵 Netzbezug) · "
                    "🟣 Einspeisung (negativ) · Gestrichelte Linie = Gesamtverbrauch")
 
+    def _render_weekly_soc_comparison(self) -> None:
+        """Render weekly SoC comparison charts for summer, winter, and transition."""
+        # Check if any scenario has battery storage and sort by capacity
+        storage_scenarios = sorted(
+            [s for s in self.scenarios if s.storage_capacity > 0],
+            key=lambda s: s.storage_capacity
+        )
+        if not storage_scenarios:
+            return
+        
+        st.header("🌤️ Speicher-Ladezustand pro Jahreszeit")
+        st.caption(
+            "Der Verlauf des Ladezustands (SoC) über eine typische Woche zeigt, wie gut die Speichergröße "
+            "zum Verbrauchsprofil passt. Zu große Speicher bleiben im Sommer dauerhaft voll, "
+            "zu kleine sind in der Übergangszeit oft noch vor Mitternacht leer."
+        )
+        
+        # Calculate consistent y-axis maximum across all seasons
+        energy_max = 0.0
+        for scenario in storage_scenarios:
+            for weekly_data in [
+                scenario.simulation.weekly_summer,
+                scenario.simulation.weekly_transition,
+                scenario.simulation.weekly_winter
+            ]:
+                if weekly_data is not None and weekly_data.hours:
+                    for data in weekly_data.hours:
+                        energy_max = max(energy_max, data.pv_generation, data.consumption)
+        energy_max = max(energy_max * 1.1, 0.1)  # Add 10% headroom, ensure minimum
+        
+        # Day labels for x-axis
+        day_labels = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+        
+        # Create tabs for summer, transition, and winter
+        summer_tab, transition_tab, winter_tab = st.tabs([
+            "☀️ Sommer (Juli)", 
+            "🌤️ Übergang (April)", 
+            "❄️ Winter (Januar)"
+        ])
+        
+        with summer_tab:
+            self._render_soc_week_chart(storage_scenarios, "summer", day_labels, "Juli", energy_max)
+        
+        with transition_tab:
+            self._render_soc_week_chart(storage_scenarios, "transition", day_labels, "April", energy_max)
+        
+        with winter_tab:
+            self._render_soc_week_chart(storage_scenarios, "winter", day_labels, "Januar", energy_max)
+
+    def _render_soc_week_chart(
+        self, 
+        scenarios: list[ScenarioResult], 
+        season: str, 
+        day_labels: list[str],
+        month_name: str,
+        energy_max: float
+    ) -> None:
+        """Render a single SoC week chart for all scenarios."""
+        # Collect data from all scenarios
+        soc_rows = []
+        background_rows = []
+        
+        for scenario in scenarios:
+            if season == "summer":
+                weekly_data = scenario.simulation.weekly_summer
+            elif season == "transition":
+                weekly_data = scenario.simulation.weekly_transition
+            else:
+                weekly_data = scenario.simulation.weekly_winter
+            
+            if weekly_data is None or not weekly_data.hours:
+                continue
+            
+            for data in weekly_data.hours:
+                day_idx = data.hour // 24
+                hour_of_day = data.hour % 24
+                day_label = day_labels[day_idx] if day_idx < len(day_labels) else f"Tag {day_idx + 1}"
+                
+                soc_rows.append({
+                    "Stunde": data.hour,
+                    "Tag": day_label,
+                    "Uhrzeit": f"{hour_of_day:02d}:00",
+                    "SoC (%)": data.soc_pct,
+                    "Szenario": scenario.name,
+                    "Speicher (kWh)": scenario.storage_capacity,
+                })
+                
+                # Only add PV/consumption data once (it's the same for all scenarios)
+                if scenario == scenarios[-1]:
+                    background_rows.append({
+                        "Stunde": data.hour,
+                        "PV (kWh)": data.pv_generation,
+                        "Verbrauch (kWh)": data.consumption,
+                    })
+        
+        if not soc_rows:
+            st.info(f"Keine Daten für {month_name} verfügbar.")
+            return
+        
+        soc_df = pd.DataFrame(soc_rows)
+        background_df = pd.DataFrame(background_rows)
+        
+        # Generate blue color scale for storage scenarios (light to dark)
+        # Sorted by capacity: smallest = lightest, largest = darkest
+        num_scenarios = len(scenarios)
+        blue_colors = COLORS.soc_color_scale(num_scenarios)
+        scenario_names = [s.name for s in scenarios]
+        
+        # Common x-axis configuration
+        # 7 days * 24 hours = 168 hours, indexed 0-167
+        x_axis = alt.X(
+            "Stunde:Q",
+            title="Wochentag",
+            axis=alt.Axis(
+                values=[0, 24, 48, 72, 96, 120, 144],
+                labelExpr="['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][floor(datum.value / 24)]",
+            ),
+            scale=alt.Scale(domain=[0, 167], nice=False),
+        )
+        
+        # Create the combined chart with dual y-axes
+        # SoC lines for each scenario (sorted by capacity via scenarios list) - LEFT axis
+        soc_chart = (
+            alt.Chart(soc_df)
+            .mark_line(strokeWidth=2)
+            .encode(
+                x=x_axis,
+                y=alt.Y(
+                    "SoC (%):Q",
+                    title="Ladezustand (%)",
+                    scale=alt.Scale(domain=[0, 100]),
+                    axis=alt.Axis(titleColor=COLORS.soc_axis_title),
+                ),
+                color=alt.Color(
+                    "Szenario:N",
+                    title="Speicher",
+                    legend=alt.Legend(orient="bottom"),
+                    sort=scenario_names,
+                    scale=alt.Scale(domain=scenario_names, range=blue_colors),
+                ),
+                order=alt.Order("Speicher (kWh):Q", sort="ascending"),
+                tooltip=[
+                    alt.Tooltip("Szenario:N"),
+                    alt.Tooltip("Tag:N"),
+                    alt.Tooltip("Uhrzeit:N"),
+                    alt.Tooltip("SoC (%):Q", format=".1f"),
+                    alt.Tooltip("Speicher (kWh):Q", format=".1f"),
+                ],
+            )
+        )
+        
+        # PV generation as area chart - RIGHT axis (orange)
+        pv_chart = (
+            alt.Chart(background_df)
+            .mark_area(opacity=0.4, color=COLORS.soc_pv_area)
+            .encode(
+                x=alt.X("Stunde:Q", scale=alt.Scale(domain=[0, 167], nice=False)),
+                y=alt.Y(
+                    "PV (kWh):Q",
+                    title="PV / Verbrauch (kWh)",
+                    scale=alt.Scale(domain=[0, energy_max]),
+                    axis=alt.Axis(titleColor=COLORS.soc_axis_title),
+                ),
+                tooltip=[
+                    alt.Tooltip("Stunde:Q", title="Stunde"),
+                    alt.Tooltip("PV (kWh):Q", format=".2f", title="PV-Erzeugung"),
+                ],
+            )
+        )
+        
+        # Consumption as line chart - RIGHT axis (blue, more visible)
+        consumption_chart = (
+            alt.Chart(background_df)
+            .mark_area(opacity=0.4, color=COLORS.soc_consumption_area)
+            .encode(
+                x=alt.X("Stunde:Q", scale=alt.Scale(domain=[0, 167], nice=False)),
+                y=alt.Y(
+                    "Verbrauch (kWh):Q",
+                    scale=alt.Scale(domain=[0, energy_max]),
+                ),
+                tooltip=[
+                    alt.Tooltip("Stunde:Q", title="Stunde"),
+                    alt.Tooltip("Verbrauch (kWh):Q", format=".2f", title="Verbrauch"),
+                ],
+            )
+        )
+        
+        # Vertical lines for day boundaries
+        day_boundaries = pd.DataFrame({"Stunde": [24, 48, 72, 96, 120, 144]})
+        day_rules = (
+            alt.Chart(day_boundaries)
+            .mark_rule(strokeDash=[4, 4], color=COLORS.soc_day_boundary, strokeWidth=1)
+            .encode(x="Stunde:Q")
+        )
+        
+        # Layer background charts (PV and consumption on secondary axis)
+        background_layer = alt.layer(pv_chart, consumption_chart)
+        
+        # Combine: PV/consumption on LEFT y-axis, SoC on RIGHT y-axis
+        # SoC lines are drawn on top (second operand) so they're not hidden behind areas
+        combined = (
+            alt.layer(background_layer, day_rules)
+            .resolve_scale(y="independent")
+            + soc_chart
+        ).resolve_scale(
+            y="independent"
+        ).properties(
+            height=350
+        ).configure(
+            locale={
+                "number": {
+                    "decimal": ",",
+                    "thousands": ".",
+                    "grouping": [3],
+                    "currency": ["", " €"],
+                }
+            }
+        )
+        
+        st.altair_chart(combined, width="stretch")
+        
+        # Add interpretation hints based on season
+        if season == "summer":
+            st.caption(
+                "☀️ **Sommer**: Hohe PV-Erzeugung (🟠 orange) übersteigt oft den Verbrauch (⚪ grau). "
+                "Speicher, die dauerhaft über 50% bleiben, sind möglicherweise überdimensioniert. "
+                "Achte auf Tage mit schlechtem Wetter (niedrigere PV-Spitzen), "
+                "um zu sehen, ob der Speicher dann entladen wird."
+            )
+        elif season == "transition":
+            st.caption(
+                "🌤️ **Übergangszeit (Frühling/Herbst)**: PV-Erzeugung (🟠 orange) und Verbrauch (⚪ grau) sind ähnlicher. "
+                "Diese Jahreszeit zeigt am besten, wie gut der Speicher zur Überbrückung "
+                "der Nacht- und Morgenstunden genutzt wird."
+            )
+        else:
+            st.caption(
+                "❄️ **Winter**: Geringe PV-Erzeugung (🟠 orange), oft unter dem Verbrauch (⚪ grau). "
+                "In dieser Zeit sind Speicher nur selten von Nutzen, da die Nächte lang sind und wenig Sonne scheint."
+            )
+
     def _render_incremental_analysis(self) -> None:
         """Render incremental analysis comparing storage upgrades."""
         if len(self.scenarios) <= 1:
             return
             
         st.header("🔋 Inkrementelle Analyse")
-        st.caption("Mehrwert jeder Ausbaustufe gegenüber der vorherigen.")
+        st.caption("Wie lange braucht ein Upgrade, bis es sich bezahlt gemacht hat? Mehrwert jeder Ausbaustufe gegenüber der vorherigen.")
         
         incr_rows = []
         for i in range(1, len(self.scenarios)):
@@ -292,10 +534,7 @@ class Report:
     def _render_longterm_comparison(self) -> None:
         """Render long-term PV vs ETF comparison chart."""
         st.header(f"📈 Langzeit-Vergleich: PV vs. ETF ({self.analysis_years} Jahre)")
-        assumptions = f"Annahmen: Strompreis +{self.e_inc * 100:.0f} %/a · ETF +{self.etf_ret * 100:.0f} %/a"
-        if self.feed_in_tariff > 0:
-            assumptions += f" · Einspeisevergütung {de(self.feed_in_tariff * 100, 1)} ct/kWh (konstant)"
-        st.caption(assumptions)
+        st.caption("Sollte ich mein Geld lieber anders investieren?")
 
         chart_frames = []
         for r in self.scenarios:
@@ -341,7 +580,7 @@ class Report:
         )
         zero_rule = (
             alt.Chart(pd.DataFrame({"y": [0]}))
-            .mark_rule(strokeDash=[4, 4], color="gray")
+            .mark_rule(strokeDash=[4, 4], color=COLORS.zero_line)
             .encode(y="y:Q")
         )
         st.altair_chart(
@@ -357,6 +596,11 @@ class Report:
             ),
             width="stretch",
         )
+
+        assumptions = f"📌 Annahmen: Strompreis +{self.e_inc * 100:.0f} %/a · ETF +{self.etf_ret * 100:.0f} %/a"
+        if self.feed_in_tariff > 0:
+            assumptions += f" · Einspeisevergütung {de(self.feed_in_tariff * 100, 1)} ct/kWh (konstant)"
+        st.caption(assumptions)
 
     def _render_scenario_details(self) -> None:
         """Render detailed per-scenario tables."""
@@ -394,6 +638,7 @@ class Report:
     def _render_summary(self) -> None:
         """Render the final summary section."""
         st.header("🏆 Zusammenfassung")
+        st.caption(f"Wie viel Gewinn habe ich nach {self.analysis_years} Jahr{"en" if self.analysis_years > 1 else ""} gemacht?")
 
         summary_rows = []
         for r in self.scenarios:

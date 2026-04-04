@@ -6,10 +6,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from typing import NamedTuple
 
 import numpy as np
 
-from solarbatteryield.models import SimulationParams, MonthlyData, HourlyResult, SimulationResult
+from solarbatteryield.models import SimulationParams, MonthlyData, HourlyResult, SimulationResult, WeeklyHourlyData
 from solarbatteryield.h0_profile import get_h0_load, get_day_type, get_season, DayType, Season
 from solarbatteryield.inverter_efficiency import (
     get_inverter_efficiency,
@@ -299,6 +300,9 @@ def _update_flex_pool(
     
     day_yield = sum(pv_raw[hour_index: hour_index + 24])
     
+    # Refresh pool every day (e.g., new laundry accumulates daily)
+    state.flex_pool = min(float(params.flex_pool_size), state.flex_pool + params.flex_refresh_rate)
+    
     if (params.flex_load_enabled and 
         day_yield > params.flex_min_yield and 
         state.flex_pool >= 1.0):
@@ -306,7 +310,45 @@ def _update_flex_pool(
         state.flex_pool -= 1.0
     else:
         state.use_flex_today = False
-        state.flex_pool = min(float(params.flex_pool_size), state.flex_pool + params.flex_refresh_rate)
+
+
+class _WeeklyTracker(NamedTuple):
+    """Tracks hourly SoC data for a specific week in the year."""
+    data: WeeklyHourlyData
+    hour_start: int
+    hour_end: int
+
+
+def _build_weekly_trackers(data_year: int, cap_gross: float) -> list[_WeeklyTracker]:
+    """
+    Create weekly SoC trackers for representative weeks per season.
+    
+    Returns empty list if no battery (cap_gross == 0).
+    Weeks selected:
+      - Summer:     July 1–7   (first week of July)
+      - Transition: April 8–14 (second week of April)
+      - Winter:     Jan 8–14   (second week of January)
+    """
+    if cap_gross <= 0:
+        return []
+    
+    is_leap = data_year % 4 == 0 and (data_year % 100 != 0 or data_year % 400 == 0)
+    
+    # 0-indexed day-of-year for the start of each representative week
+    week_start_days = {
+        "summer": 182 if not is_leap else 183,      # July 1st
+        "transition": 98 if not is_leap else 99,     # April 8th
+        "winter": 7,                                  # January 8th
+    }
+    
+    return [
+        _WeeklyTracker(
+            data=WeeklyHourlyData(),
+            hour_start=start_day * 24,
+            hour_end=start_day * 24 + 168,
+        )
+        for start_day in week_start_days.values()
+    ]
 
 
 def simulate(
@@ -341,6 +383,9 @@ def simulate(
     
     # Monthly tracking
     monthly: dict[int, MonthlyData] = {m: MonthlyData() for m in range(1, 13)}
+    
+    # Weekly SoC tracking for representative weeks (summer, transition, winter)
+    weekly_trackers = _build_weekly_trackers(params.data_year, cap_gross)
     
     # Start date for the simulation year
     start_date = date(params.data_year, 1, 1)
@@ -378,9 +423,27 @@ def simulate(
         # Accumulate totals
         state.accumulate_result(result)
         monthly[month].add_hourly_result(result)
+        
+        # Capture weekly SoC data for representative weeks
+        if cap_gross > 0:
+            soc_pct = (state.soc / cap_gross) * 100
+            for tracker in weekly_trackers:
+                if tracker.hour_start <= i < tracker.hour_end:
+                    tracker.data.add_hour(
+                        hour=i - tracker.hour_start,
+                        soc=state.soc,
+                        soc_pct=soc_pct,
+                        pv_generation=gen_dc,
+                        consumption=load
+                    )
     
     # Calculate full cycles: total discharge energy / battery capacity
     full_cycles = state.total_battery_discharge / cap_gross if cap_gross > 0 else 0.0
+    
+    # Unpack weekly trackers: summer, transition, winter (order from _build_weekly_trackers)
+    weekly_summer = weekly_trackers[0].data if weekly_trackers else None
+    weekly_transition = weekly_trackers[1].data if weekly_trackers else None
+    weekly_winter = weekly_trackers[2].data if weekly_trackers else None
     
     return SimulationResult(
         grid_import=state.grid_import,
@@ -389,4 +452,7 @@ def simulate(
         curtailed=state.curtailed,
         monthly=monthly,
         full_cycles=full_cycles,
+        weekly_summer=weekly_summer,
+        weekly_winter=weekly_winter,
+        weekly_transition=weekly_transition,
     )

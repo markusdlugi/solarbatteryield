@@ -126,7 +126,7 @@ def _render_advanced_profile_settings() -> None:
     
     # Check if day-type profiles are enabled
     use_day_types = st.toggle(
-        "📅 Tagtyp-Differenzierung", 
+        "📅 Wochentag-Unterscheidung",
         key="cfg_use_day_types",
         help="Separate Profile für Werktage, Samstage und Sonn-/Feiertage",
         **widget_value("cfg_use_day_types", False),
@@ -409,9 +409,9 @@ def _render_flex_load_settings() -> None:
         st.number_input(
             "Auffrischungsrate (pro Tag)", step=0.1, min_value=0.0,
             format="%.1f", key="cfg_flex_refresh",
-            help="Einsätze die pro Nicht-Flex-Tag zum Vorrat hinzugefügt werden. "
-                 "Beispiel Waschmaschine: wie lange dauert es, bis ein neuer Waschgang durchgeführt werden kann "
-                 "(bei 0,5 also 2 Tage)?",
+            help="Einsätze die jeden Tag zum Vorrat hinzugefügt werden. "
+                 "Beispiel Waschmaschine: Jeden Tag fällt neue Wäsche an. "
+                 "Bei 0,5 kann nach 2 Tagen ein neuer Waschgang durchgeführt werden.",
             **widget_value("cfg_flex_refresh"))
 
 
@@ -426,6 +426,7 @@ def _render_periodic_load_settings() -> None:
     if sv("cfg_periodic_enabled"):
         st.number_input(
             "Intervall (Tage)", step=1, min_value=1, key="cfg_periodic_days",
+            help="Wie oft die Zusatzlast auftritt (z.B. alle 3 Tage)",
             **widget_value("cfg_periodic_days"))
         st.caption("Zusatzlast pro Stunde an Ausführungstagen (Watt)")
         periodic_df = pd.DataFrame({
@@ -619,7 +620,7 @@ def _render_storage_section() -> None:
         st.slider("Zellverluste Laden/Entladen (%)", LIMITS.batt_loss_min, LIMITS.batt_loss_max,
                   key="cfg_batt_loss",
                   help="Verluste in den Batteriezellen beim Laden und Entladen. "
-                       "Verlust wird bei jedem der beiden Prozesse in der angegebenen Höhe berechnet. "
+                       "Verlust wird bei jedem der beiden Prozesse jeweils in der angegebenen Höhe berechnet. "
                        "Wechselrichterverluste werden separat berechnet.",
                   **widget_value("cfg_batt_loss"))
         
@@ -739,7 +740,7 @@ def _render_storages_config() -> None:
 def _render_prices_section() -> None:
     """Render the prices and comparison section."""
     with st.sidebar.expander("💰 Preise & Vergleich"):
-        st.number_input("Strompreis (€/kWh)", step=0.01, format="%.2f", key="cfg_e_price",
+        st.number_input("Strompreis (ct/kWh)", step=1.0, format="%.2f", key="cfg_e_price",
                         min_value=LIMITS.e_price_min, max_value=LIMITS.e_price_max,
                         **widget_value("cfg_e_price"))
         st.number_input(

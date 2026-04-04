@@ -137,7 +137,6 @@ def get_config() -> SimulationConfig:
             inverter_efficiency_custom=st.session_state.get("_inverter_eff_custom", []),
             inverter_limit_enabled=inverter_limit_enabled,
             inverter_limit_w=sv("cfg_inverter_limit_w"),
-            feed_in_tariff=sv("cfg_feed_in_tariff"),
             base_cost=sv("cfg_base_cost"),
             modules=modules,
         ),
@@ -153,8 +152,9 @@ def get_config() -> SimulationConfig:
             options=storage_options,
         ),
         economics=EconomicsConfig(
-            e_price=sv("cfg_e_price"),
+            e_price=sv("cfg_e_price") / 100,  # Convert ct/kWh to EUR/kWh
             e_inc=sv("cfg_e_inc") / 100,
+            feed_in_tariff=sv("cfg_feed_in_tariff"),
             etf_ret=sv("cfg_etf_ret") / 100,
             analysis_years=sv("cfg_years"),
         ),

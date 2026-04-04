@@ -48,6 +48,7 @@ Nach Eingabe von **Standort** und **Jahresverbrauch** startet die Analyse automa
 
 - **Szenario-Übersicht** – Autarkie, Eigenverbrauch, Netzbezug, Einspeisung und Ersparnis pro Szenario
 - **Monatliche Energiebilanz** – Gestapeltes Balkendiagramm (Direkt-PV, Batterie, Netzbezug, Einspeisung)
+- **Speicher-Ladezustand pro Jahreszeit** - Verlauf des SoC zu unterschiedlichen Jahreszeiten
 - **Inkrementelle Analyse** – Mehrwert jeder Ausbaustufe (Δ kWh, Δ €, Amortisation, Rendite)
 - **Langzeit-Chart** – PV-Netto-Gewinn vs. ETF über den Analyse-Horizont
 - **Zusammenfassung** – Bestes Szenario nach absolutem PV-Gewinn

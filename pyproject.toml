@@ -1,7 +1,7 @@
 [project]
 name = "solarbatteryield"
-version = "0.1.0"
-description = "PV Analysis Application - Analyze PV systems with battery storage"
+version = "1.0.0"
+description = "SolarBatterYield- Analyze PV systems with battery storage"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

@@ -127,7 +127,7 @@ class ConfigDefaults:
     
     # Storage
     dc_coupled: str = "DC-gekoppelt"
-    batt_loss: int = 5  # Cell charge/discharge loss %
+    batt_loss: int = 7  # Cell charge/discharge loss %
     batt_inverter_preset: str = "median"  # Battery inverter efficiency preset for AC-coupled
     min_soc_summer: int = 10  # Min SoC summer %
     max_soc_summer: int = 100  # Max SoC summer %
@@ -135,7 +135,7 @@ class ConfigDefaults:
     max_soc_winter: int = 100  # Max SoC winter %
     
     # Economics
-    e_price: float = 0.27  # EUR/kWh
+    e_price: float = 27.0  # ct/kWh
     e_inc: float = 3.0  # % per year
     feed_in_tariff: float = 0.0  # ct/kWh
     etf_ret: float = 7.0  # % per year
@@ -230,8 +230,8 @@ class ValidationLimits:
     soc_max: int = 100
     
     # Economics
-    e_price_min: float = 0.01
-    e_price_max: float = 1.0
+    e_price_min: float = 1.0  # ct/kWh
+    e_price_max: float = 100.0  # ct/kWh
     e_inc_min: float = -5.0
     e_inc_max: float = 20.0
     etf_ret_min: float = -10.0
@@ -252,12 +252,25 @@ class ColorScheme:
     warning: str = "#ff9800"   # Orange
     negative: str = "#e53935"  # Red
     
-    # Chart colors
+    # Chart colors – monthly energy balance
     direct_pv: str = "#ff9800"    # Orange
     battery: str = "#4db68a"      # Teal
     grid_import: str = "#488fc2"  # Blue
     feed_in: str = "#a280db"      # Purple
     consumption_line: str = "#78909c"  # Gray
+    
+    # Chart colors – weekly SoC comparison
+    soc_hue: int = 210       # Blue hue for SoC lines
+    soc_saturation: int = 70
+    soc_lightness_light: int = 75   # Lightest (smallest storage)
+    soc_lightness_dark: int = 30    # Darkest (largest storage)
+    soc_pv_area: str = "#ff9800"    # PV area background (same as direct_pv)
+    soc_consumption_area: str = "#aaaaaa"  # Consumption area background
+    soc_axis_title: str = "#999999"  # Secondary axis title color
+    soc_day_boundary: str = "#cccccc"  # Day boundary vertical lines
+    
+    # Chart colors – general
+    zero_line: str = "gray"  # Zero reference line
     
     # Thresholds for coloring
     autarky_good: float = 50.0
@@ -275,6 +288,15 @@ class ColorScheme:
     # > 300: High utilization (faster aging, rare in practice)
     cycles_low: float = 150.0
     cycles_high: float = 300.0
+    
+    def soc_color_scale(self, num_scenarios: int) -> list[str]:
+        """Generate blue color scale for SoC storage scenarios (light to dark)."""
+        spread = self.soc_lightness_light - self.soc_lightness_dark
+        return [
+            f"hsl({self.soc_hue}, {self.soc_saturation}%, "
+            f"{self.soc_lightness_light - i * (spread / max(num_scenarios - 1, 1))}%)"
+            for i in range(num_scenarios)
+        ]
 
 
 COLORS = ColorScheme()
