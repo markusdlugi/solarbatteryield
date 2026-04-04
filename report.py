@@ -443,11 +443,23 @@ class Report:
                 st.caption("Link kopieren und teilen – alle Parameter sind im Link gespeichert.")
             except Exception as exc:
                 st.error(f"Fehler beim Erstellen des Links: {exc}")
+        
+        _render_data_attribution()
 
 
 def render_report(config: SimulationConfig, results: AnalysisResult) -> None:
     """Convenience function to create and render a report."""
     Report(config, results).render()
+
+
+def _render_data_attribution() -> None:
+    """Render data source attribution footer."""
+    st.divider()
+    st.caption(
+        "📊 Datenquellen: PV-Daten © [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/) (European Commission) · "
+        "Geocoding © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, "
+        "[ODbL](https://opendatacommons.org/licenses/odbl/)"
+    )
 
 
 def render_missing_config_message(missing: list[str]) -> None:
@@ -466,9 +478,6 @@ def render_missing_config_message(missing: list[str]) -> None:
     st.markdown("- 🔋️ drei unterschiedlichen Speicherkonfigurationen mit bis zu 6kWh")
     st.markdown("Du kannst diese beliebig erweitern, ändern, löschen oder zusätzliche Einstellungen anpassen - "
                 "der Report wird automatisch aktualisiert.")
-    st.divider()
-    st.caption(
-        "💡 Tipp: Öffne die Abschnitte in der Seitenleiste links, um Standort und "
-        "Verbrauchsdaten einzugeben."
-    )
+
+    _render_data_attribution()
 

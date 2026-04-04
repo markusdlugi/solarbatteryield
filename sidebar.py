@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
 
-from config import PROFILE_SATURDAY, PROFILE_SUNDAY, DEFAULTS, LIMITS, scale_profiles
+from config import PROFILE_SATURDAY, PROFILE_SUNDAY, LIMITS, scale_profiles
 from api import geocode, reverse_geocode, GeocodingError
 from inverter_efficiency import (
     DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT,
@@ -79,7 +79,7 @@ def _render_location_section() -> None:
 
 def _render_consumption_section() -> None:
     """Render the consumption configuration section."""
-    with st.sidebar.expander("💡 Verbrauch"):
+    with st.sidebar.expander("💡 Verbrauch", expanded=True):
         _profile_modes = ["Einfach", "Erweitert", "Experte"]
         st.radio(
             "Lastprofil-Modus", _profile_modes, horizontal=True,

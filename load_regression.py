@@ -20,10 +20,9 @@ Data source:
     from measured single-family house electrical load profiles of 38 households in
     Germany, published in:
 
-        Tjaden, T., Bergner, J., Weniger, J. & Quaschning, V.
-        "Representative electrical load profiles of residential buildings in Germany
-        with a temporal resolution of one second."
-        Scientific Data 10, 104 (2023). https://doi.org/10.1038/s41597-022-01156-1
+        Schlemminger, M., Ohrdes, T., Schneider, E. et al.
+        "Dataset on electrical single-family house and heat pump load profiles in Germany."
+        Sci Data 9, 56 (2022). https://doi.org/10.1038/s41597-022-01156-1
 
     The regression database was processed and published by PVTools
     (MIT License, Copyright (c) 2023 nick81nrw):

@@ -219,7 +219,7 @@ def geocode(query: str) -> tuple[str, float, float] | None:
             lambda: requests.get(
                 "https://nominatim.openstreetmap.org/search",
                 params={"q": query, "format": "json", "limit": 1},
-                headers={"User-Agent": "pv-analyse-streamlit/1.0"},
+                headers={"User-Agent": "solarbatteryield-streamlit/1.0"},
                 timeout=10,
             ),
             retry_config=retry_config,
@@ -269,7 +269,7 @@ def reverse_geocode(lat: float, lon: float) -> str | None:
                 "zoom": 10, 
                 "accept-language": "de"
             },
-            headers={"User-Agent": "pv-analyse-streamlit/1.0"},
+            headers={"User-Agent": "solarbatteryield-streamlit/1.0"},
             timeout=10,
         )
         response.raise_for_status()
