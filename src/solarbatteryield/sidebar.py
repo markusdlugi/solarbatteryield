@@ -624,17 +624,66 @@ def _render_storage_section() -> None:
                        "Wechselrichterverluste werden separat berechnet.",
                   **widget_value("cfg_batt_loss"))
         
+        # SoC sliders with full 0-100 range but auto-correction for invalid values
+        # Use on_change callbacks to track which slider was changed
+        
+        def _on_min_soc_s_change():
+            st.session_state._last_soc_change = "min_s"
+        
+        def _on_max_soc_s_change():
+            st.session_state._last_soc_change = "max_s"
+        
+        def _on_min_soc_w_change():
+            st.session_state._last_soc_change = "min_w"
+        
+        def _on_max_soc_w_change():
+            st.session_state._last_soc_change = "max_w"
+        
+        # Check and fix invalid values BEFORE creating sliders (required by Streamlit)
+        _last_change = st.session_state.get("_last_soc_change")
+        
+        # Summer SoC: ensure min <= max
+        _min_s = sv("cfg_min_soc_s")
+        _max_s = sv("cfg_max_soc_s")
+        if _min_s > _max_s:
+            if _last_change == "min_s":
+                # Min was changed, cap it to max
+                st.session_state.cfg_min_soc_s = _max_s
+            else:
+                # Max was changed (or initial load), raise it to min
+                st.session_state.cfg_max_soc_s = _min_s
+            st.session_state._last_soc_change = None
+        
+        # Winter SoC: ensure min <= max
+        _min_w = sv("cfg_min_soc_w")
+        _max_w = sv("cfg_max_soc_w")
+        if _min_w > _max_w:
+            if _last_change == "min_w":
+                st.session_state.cfg_min_soc_w = _max_w
+            else:
+                st.session_state.cfg_max_soc_w = _min_w
+            st.session_state._last_soc_change = None
+        
         st.slider("Min. Ladezustand Sommer (%)", LIMITS.soc_min, LIMITS.soc_max,
                   key="cfg_min_soc_s",
+                  on_change=_on_min_soc_s_change,
+                  help="Kann nicht höher als Max. Ladezustand sein.",
                   **widget_value("cfg_min_soc_s"))
         st.slider("Max. Ladezustand Sommer (%)", LIMITS.soc_min, LIMITS.soc_max,
                   key="cfg_max_soc_s",
+                  on_change=_on_max_soc_s_change,
+                  help="Kann nicht niedriger als Min. Ladezustand sein.",
                   **widget_value("cfg_max_soc_s"))
+        
         st.slider("Min. Ladezustand Winter (%)", LIMITS.soc_min, LIMITS.soc_max,
                   key="cfg_min_soc_w",
+                  on_change=_on_min_soc_w_change,
+                  help="Kann nicht höher als Max. Ladezustand sein.",
                   **widget_value("cfg_min_soc_w"))
         st.slider("Max. Ladezustand Winter (%)", LIMITS.soc_min, LIMITS.soc_max,
                   key="cfg_max_soc_w",
+                  on_change=_on_max_soc_w_change,
+                  help="Kann nicht niedriger als Min. Ladezustand sein.",
                   **widget_value("cfg_max_soc_w"))
         st.divider()
         _render_storages_config()
