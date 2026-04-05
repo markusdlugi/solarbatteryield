@@ -5,7 +5,6 @@ Handles PVGIS data fetching and geocoding via OpenStreetMap.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 from typing import TypeVar
 
 import numpy as np
@@ -48,13 +47,20 @@ class ConfigurationError(PVAnalysisError):
 T = TypeVar('T')
 
 
-@dataclass
 class RetryConfig:
     """Configuration for retry behavior."""
-    max_retries: int = 3
-    base_delay: float = 1.0  # seconds
-    max_delay: float = 30.0  # seconds
-    backoff_factor: float = 2.0
+    
+    def __init__(
+        self,
+        max_retries: int = 3,
+        base_delay: float = 1.0,
+        max_delay: float = 30.0,
+        backoff_factor: float = 2.0,
+    ):
+        self.max_retries = max_retries
+        self.base_delay = base_delay
+        self.max_delay = max_delay
+        self.backoff_factor = backoff_factor
 
 
 def _retry_with_backoff(
