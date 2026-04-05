@@ -266,6 +266,54 @@ class TestSessionStateHelpers:
         assert result == {"value": 50.0}
 
 
+class TestSessionIsolation:
+    """Tests for session state isolation between users."""
+
+    def test_default_modules_should_be_deeply_copied(self, mock_streamlit):
+        """Default modules should be deep copied to prevent sharing between sessions.
+        
+        This is critical for security - without deep copy, modifying modules
+        in one session would affect all other sessions using the defaults.
+        """
+        # given
+        from solarbatteryield.config import DEFAULT_MODULES
+        from solarbatteryield.state import init_session_state
+        
+        mock_streamlit.query_params = {}
+        
+        # when - simulate two different sessions initializing
+        init_session_state()
+        session1_modules = mock_streamlit.session_state["modules"]
+        
+        # Modify the module in session 1
+        session1_modules[0]["name"] = "Modified by User 1"
+        session1_modules[0]["peak"] = 99.9
+        
+        # then - the DEFAULT_MODULES should NOT be affected
+        assert DEFAULT_MODULES[0]["name"] == "Süd", "DEFAULT_MODULES should not be modified"
+        assert DEFAULT_MODULES[0]["peak"] == 2.0, "DEFAULT_MODULES should not be modified"
+
+    def test_default_storages_should_be_deeply_copied(self, mock_streamlit):
+        """Default storages should be deep copied to prevent sharing between sessions."""
+        # given
+        from solarbatteryield.config import DEFAULT_STORAGES
+        from solarbatteryield.state import init_session_state
+        
+        mock_streamlit.query_params = {}
+        
+        # when - simulate session initializing
+        init_session_state()
+        session_storages = mock_streamlit.session_state["storages"]
+        
+        # Modify the storage in session
+        session_storages[0]["name"] = "Modified Storage"
+        session_storages[0]["cap"] = 999.0
+        
+        # then - the DEFAULT_STORAGES should NOT be affected
+        assert DEFAULT_STORAGES[0]["name"] == "Klein", "DEFAULT_STORAGES should not be modified"
+        assert DEFAULT_STORAGES[0]["cap"] == 2.0, "DEFAULT_STORAGES should not be modified"
+
+
 class TestConfigDecoding:
     """Tests for configuration decoding edge cases."""
 

@@ -2,6 +2,7 @@
 Session state management and URL configuration sharing for the PV analysis application.
 """
 import base64
+import copy
 import json
 import zlib
 import streamlit as st
@@ -99,15 +100,15 @@ def init_session_state() -> None:
             except Exception:
                 st.toast("Ungültiger Konfigurations-Link – Standardwerte werden verwendet.")
 
-    # Initialize modules
+    # Initialize modules (deep copy to avoid sharing dicts between sessions)
     if "modules" not in st.session_state:
         st.session_state.next_mod_id = 1
-        st.session_state.modules = list(DEFAULT_MODULES)
+        st.session_state.modules = copy.deepcopy(DEFAULT_MODULES)
 
-    # Initialize storages
+    # Initialize storages (deep copy to avoid sharing dicts between sessions)
     if "storages" not in st.session_state:
         st.session_state.next_stor_id = 3
-        st.session_state.storages = list(DEFAULT_STORAGES)
+        st.session_state.storages = copy.deepcopy(DEFAULT_STORAGES)
 
     # Initialize consumption profiles
     if "_active_base" not in st.session_state:
