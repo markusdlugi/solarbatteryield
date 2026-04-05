@@ -602,6 +602,25 @@ class Report:
             assumptions += f" · Einspeisevergütung {de(self.feed_in_tariff * 100, 1)} ct/kWh (konstant)"
         st.caption(assumptions)
 
+        with st.expander("ℹ️ Wie funktioniert dieser Vergleich?"):
+            st.markdown("""
+**Fragestellung:** Lohnt sich die PV-Investition oder wäre das Geld in einem ETF besser angelegt?
+
+**Vergleichslogik:** Beide Szenarien starten mit dem gleichen Investitionsbetrag:
+- **PV:** Die Investition führt zu jährlichen Ersparnissen (reduzierter Netzbezug + ggf. Einspeisevergütung)
+- **ETF:** Der gleiche Betrag wird mit der angenommenen Rendite verzinst
+
+**Warum startet PV negativ?** Der „Netto-Gewinn" zeigt die kumulierte Ersparnis *abzüglich* der Anfangsinvestition. 
+Da das Geld für die PV-Anlage bereits ausgegeben wurde und im PV-System gebunden ist, startet PV im Minus. 
+Beim ETF ist der Netto-Gewinn = Wertzuwachs (Kapital bleibt erhalten), daher startet er bei 0.
+
+**Stromkosten:** Stromkosten fallen in *beiden* Fällen an – bei PV sind sie nur reduziert durch Eigenverbrauch. Diese Einsparung ist genau das, was hier als „PV-Ersparnis" dargestellt wird. 
+Die Stromkosten müssen also nicht noch einmal vom ETF-Gewinn abgezogen werden – sie stecken bereits im Vergleich.
+
+**Vereinfachungen:** Abschreibung/Wertverlust der PV-Anlage sowie Wartungskosten sind nicht berücksichtigt. 
+Ebenso wenig Kapitalertragsteuer auf ETF-Gewinne oder steuerliche Vorteile der PV-Anlage.
+            """)
+
     def _render_scenario_details(self) -> None:
         """Render detailed per-scenario tables."""
         tabs = st.tabs([r.name for r in self.scenarios])
