@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import math
+from functools import lru_cache
 from pathlib import Path
 
 
@@ -44,8 +45,6 @@ _DB_PATH = Path(__file__).parent / "data" / "regression_db.json"
 # Pre-computed bin resolution in the database
 DB_RESOLUTION_W: int = 50
 
-# Cache for looked-up distributions (regression_key → distribution)
-_distribution_cache: dict[int, list[tuple[int, float]]] = {}
 
 
 def _load_regression_db() -> dict[int, list[tuple[int, float]]]:
@@ -133,6 +132,18 @@ def _create_regression(load_w: float) -> tuple[list[tuple[int, float]], int]:
 
 # ─── Public API ────────────────────────────────────────────────────────────────
 
+@lru_cache(maxsize=256)
+def _get_synthetic_distribution(regression_key: int) -> tuple[tuple[tuple[int, float], ...], int]:
+    """
+    Generate and cache a synthetic distribution for high loads.
+    
+    Uses lru_cache to bound memory usage. Returns tuple of tuples for hashability.
+    """
+    distribution, resolution = _create_regression(regression_key)
+    # Convert list to tuple for caching
+    return tuple(distribution), resolution
+
+
 def _get_distribution(load_w: float) -> tuple[list[tuple[int, float]], int]:
     """
     Look up (or create) the load distribution for a given average hourly load.
@@ -146,15 +157,9 @@ def _get_distribution(load_w: float) -> tuple[list[tuple[int, float]], int]:
     if regression_key in _REGRESSION_DB:
         return _REGRESSION_DB[regression_key], DB_RESOLUTION_W // 2  # 25 W
 
-    # Check cache for synthetic distributions
-    if regression_key in _distribution_cache:
-        # Retrieve resolution from cache tag — store alongside
-        pass
-
-    # Outside the pre-computed range: generate a synthetic distribution
-    distribution, resolution = _create_regression(load_w)
-    _distribution_cache[regression_key] = distribution
-    return distribution, resolution // 2
+    # Outside the pre-computed range: generate a synthetic distribution (cached)
+    distribution_tuple, resolution = _get_synthetic_distribution(regression_key)
+    return list(distribution_tuple), resolution // 2
 
 
 def get_direct_pv_fraction(load_w: float, pv_w: float) -> float:
