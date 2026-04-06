@@ -1,5 +1,5 @@
 """
-PV Analysis Application - Main Entry Point
+SolarBatterYield - Main Entry Point
 
 A Streamlit application for analyzing PV systems with battery storage.
 Compares different storage configurations and investment scenarios.
@@ -8,7 +8,7 @@ import numpy as np
 import streamlit as st
 
 # Configure page first (must be first Streamlit command)
-st.set_page_config(page_title="PV & Speicher Analyse", page_icon="☀️", layout="wide")
+st.set_page_config(page_title="SolarBatterYield", page_icon="☀️", layout="wide")
 
 # Import application modules
 from solarbatteryield.api import get_pvgis_hourly, PVGISError, APIError
