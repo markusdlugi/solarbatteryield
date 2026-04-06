@@ -9,6 +9,9 @@ __version__ = "0.1.0"
 
 # Pre-import modules to ensure they are fully loaded before concurrent access.
 # This prevents race conditions with @dataclass decorators on Streamlit Cloud.
-from solarbatteryield import h0_profile  # noqa: F401
-from solarbatteryield import config  # noqa: F401
-from solarbatteryield import models  # noqa: F401
+# Order matters: import dependencies before dependents.
+from solarbatteryield import inverter_efficiency  # noqa: F401  - needed by models, simulation
+from solarbatteryield import h0_profile  # noqa: F401  - needed by config, simulation
+from solarbatteryield import load_regression  # noqa: F401  - JSON loaded at module level
+from solarbatteryield import config  # noqa: F401  - needed by state, sidebar, report
+from solarbatteryield import models  # noqa: F401  - needed by simulation, report
