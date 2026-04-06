@@ -149,56 +149,12 @@ E. et al.: *"Dataset on electrical single-family house and heat pump load profil
 Wahrscheinlichkeitsdichtefunktionen in 50-W-Bins wurde vom Projekt [PVTools](https://github.com/nick81nrw/PVTools) (MIT
 License, Copyright © 2023 nick81nrw) durchgeführt und als `regression.json` veröffentlicht.
 
+## Entwicklung
+
+Siehe [CONTRIBUTING.md](CONTRIBUTING.md) für Setup, Tests und Commit-Konventionen.
+
 ## Lizenz
 
 Dieses Projekt steht unter der [MIT License](LICENSE).
 
-## Entwicklung
-
-### Projektstruktur
-
-```
-solarbatteryield/
-├── src/solarbatteryield/   # Application source code
-│   ├── __init__.py
-│   ├── streamlit_app.py    # Main entry point
-│   ├── simulation.py       # Core simulation engine
-│   ├── models.py           # Data classes
-│   └── ...
-├── tests/                  # Test suite
-│   ├── test_simulation.py  # Unit tests
-│   ├── test_snapshots.py   # Snapshot regression tests
-│   ├── test_smoke.py       # Smoke tests
-│   └── __snapshots__/      # Pinned snapshot data
-├── pyproject.toml          # Project configuration
-└── uv.lock                 # Dependency lock file
-```
-
-### Setup
-
-```bash
-git clone https://github.com/your-username/solarbatteryield.git
-cd solarbatteryield
-uv sync --dev
-uv run streamlit run src/solarbatteryield/streamlit_app.py
-```
-
-### Tests ausführen
-
-```bash
-# Run all tests
-uv run pytest
-
-# Run specific test files
-uv run pytest tests/test_simulation.py -v
-```
-
-### Aktualisieren der Snapshots
-
-Nach Änderungen an der Simulationslogik oder den Ausgabeformaten müssen die Snapshot-Tests aktualisiert werden, um die
-neuen erwarteten Ergebnisse zu reflektieren. Dies geschieht mit dem `--snapshot-update` Flag:
-
-```bash
-uv run pytest tests/test_snapshots.py --snapshot-update
-```
 
