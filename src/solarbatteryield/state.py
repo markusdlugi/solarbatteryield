@@ -100,6 +100,13 @@ def init_session_state() -> None:
             except Exception:
                 st.toast("Ungültiger Konfigurations-Link – Standardwerte werden verwendet.")
 
+    # Pre-initialize all config keys with their defaults to avoid
+    # "dictionary changed size during iteration" errors when widgets
+    # try to initialize them during render.
+    for key, default in SESSION_STATE_DEFAULTS.items():
+        if key not in st.session_state:
+            st.session_state[key] = default
+
     # Initialize modules (deep copy to avoid sharing dicts between sessions)
     if "modules" not in st.session_state:
         st.session_state.next_mod_id = 1
@@ -155,4 +162,34 @@ def widget_value(key: str, default=None) -> dict:
     if default is None:
         default = SESSION_STATE_DEFAULTS.get(key)
     return {"value": default}
+
+
+def selectbox_index(key: str, options: list, default=None) -> dict:
+    """Return dict with 'index' only if key not already in session state.
+    
+    For selectbox widgets, the default is set via 'index' parameter, not 'value'.
+    This helper computes the index from the current session state value or default.
+    
+    Args:
+        key: The session state key for the widget
+        options: List of options for the selectbox
+        default: Default value (looked up from SESSION_STATE_DEFAULTS if None)
+        
+    Returns:
+        Empty dict if key in session state, otherwise {"index": computed_index}
+    """
+    if key in st.session_state:
+        return {}
+    if default is None:
+        default = SESSION_STATE_DEFAULTS.get(key)
+    try:
+        index = options.index(default) if default in options else 0
+    except (ValueError, TypeError):
+        index = 0
+    return {"index": index}
+
+
+# Alias for radio buttons which use the same 'index' parameter as selectbox
+radio_index = selectbox_index
+
 

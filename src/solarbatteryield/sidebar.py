@@ -14,7 +14,7 @@ from solarbatteryield.inverter_efficiency import (
     DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT,
     INVERTER_EFFICIENCY_CURVES,
 )
-from solarbatteryield.state import sv, widget_value
+from solarbatteryield.state import sv, widget_value, selectbox_index, radio_index
 
 
 def render_sidebar() -> None:
@@ -42,7 +42,7 @@ def _render_location_section() -> None:
                 if result:
                     display_name, found_lat, found_lon = result
                     st.session_state._location_display_name = display_name
-                    if "cfg_lat" not in st.session_state or st.session_state.get("_last_geo_query") != location_query:
+                    if st.session_state.get("_last_geo_query") != location_query:
                         st.session_state.cfg_lat = found_lat
                         st.session_state.cfg_lon = found_lon
                         st.session_state._last_geo_query = location_query
@@ -54,10 +54,6 @@ def _render_location_section() -> None:
                 st.error(f"⚠️ {e}")
                 st.session_state._location_display_name = None
 
-        if "cfg_lat" not in st.session_state:
-            st.session_state.cfg_lat = None
-        if "cfg_lon" not in st.session_state:
-            st.session_state.cfg_lon = None
 
         st.number_input("Breitengrad", format="%.4f", key="cfg_lat",
                         placeholder="z. B. 48.1371")
@@ -83,11 +79,11 @@ def _render_consumption_section() -> None:
         _profile_modes = ["Einfach", "Erweitert", "Experte"]
         st.radio(
             "Lastprofil-Modus", _profile_modes, horizontal=True,
-            index=_profile_modes.index(sv("cfg_profile_mode")),
             key="cfg_profile_mode",
             help="**Einfach**: BDEW H0-Standardlastprofil mit Unterscheidung nach Wochentag/Samstag/Sonntag. "
                  "**Erweitert**: Eigenes stündliches Lastprofil mit optionaler Saisonskalierung. "
                  "**Experte**: Eigene Jahresdaten aus Smart-Meter als CSV hochladen.",
+            **radio_index("cfg_profile_mode", _profile_modes),
         )
         
         # Detect switch from Einfach → Erweitert: pre-fill profiles from annual kWh
@@ -102,9 +98,10 @@ def _render_consumption_section() -> None:
         
         if current_mode == "Einfach":
             st.number_input(
-                "Jahresverbrauch (kWh)", value=sv("cfg_annual_kwh"), step=100,
+                "Jahresverbrauch (kWh)", step=100,
                 min_value=LIMITS.annual_kwh_min, key="cfg_annual_kwh",
                 placeholder="z. B. 3000",
+                **widget_value("cfg_annual_kwh"),
             )
             st.caption("📊 Das BDEW H0-Standardlastprofil berücksichtigt automatisch "
                       "unterschiedliche Verbräuche an Werktagen, Samstagen und Sonn-/Feiertagen "
@@ -448,8 +445,9 @@ def _render_pv_system_section() -> None:
     with st.sidebar.expander("⚡ PV-System"):
         _year_options = list(range(LIMITS.year_min, LIMITS.year_max + 1))
         st.selectbox("PVGIS-Datenjahr", _year_options,
-                     index=_year_options.index(sv("cfg_year")), key="cfg_year",
-                     help="Das Jahr für die Analyse. 2015 war ein gutes Durchschnittsjahr.")
+                     key="cfg_year",
+                     help="Das Jahr für die Analyse. 2015 war ein gutes Durchschnittsjahr.",
+                     **selectbox_index("cfg_year", _year_options))
         st.slider("PV System-Verluste (%)", LIMITS.loss_min, LIMITS.loss_max, key="cfg_loss",
                   help="Verluste durch Kabel, Verschmutzung, Temperatur, Mismatch etc. "
                        "**Ohne Wechselrichterverluste**, da diese separat berechnet werden (s.u.), "
@@ -485,22 +483,17 @@ def _render_inverter_efficiency_section() -> None:
         "custom": "⚙️ Benutzerdefiniert",
     }
     
-    # Initialize preset if not in session state
-    if "cfg_inverter_efficiency_preset" not in st.session_state:
-        st.session_state.cfg_inverter_efficiency_preset = "median"
-    
-    current_preset = sv("cfg_inverter_efficiency_preset")
-    preset_index = list(_preset_options.keys()).index(current_preset) if current_preset in _preset_options else 1
+    _preset_keys = list(_preset_options.keys())
     
     st.selectbox(
         "📈 WR-Wirkungsgradkurve",
-        options=list(_preset_options.keys()),
+        options=_preset_keys,
         format_func=lambda x: _preset_options[x],
-        index=preset_index,
         key="cfg_inverter_efficiency_preset",
         help="Wirkungsgrad des Wechselrichters variiert mit der Leistung. "
              "Basierend auf CEC-Daten (California Energy Commission) von ~3.000 Wechselrichtern. "
              "P10 = 10. Perzentil (konservativ), P50 = Median (typisch), P90 = 90. Perzentil (Premium-Geräte).",
+        **selectbox_index("cfg_inverter_efficiency_preset", _preset_keys),
     )
     
     # Show custom curve editor if custom is selected
@@ -605,12 +598,12 @@ def _render_storage_section() -> None:
         _coupling_options = ["DC-gekoppelt", "AC-gekoppelt"]
         st.radio(
             "Speicheranbindung", _coupling_options, horizontal=True,
-            index=_coupling_options.index(sv("cfg_dc_coupled")),
             key="cfg_dc_coupled",
             help="**DC-gekoppelt**: Batterie lädt ohne Limit direkt von den Panels – "
                  "Wechselrichter-Limit gilt nur für die AC-Seite. "
                  "**AC-gekoppelt**: Batterie lädt von AC über eigenen Batterie-WR – "
-                 "Wechselrichter-Limit begrenzt den gesamten PV-Ertrag."
+                 "Wechselrichter-Limit begrenzt den gesamten PV-Ertrag.",
+            **radio_index("cfg_dc_coupled", _coupling_options),
         )
 
         # Battery inverter efficiency (AC-coupled only)
@@ -698,21 +691,17 @@ def _render_batt_inverter_efficiency_section() -> None:
         "custom": "⚙️ Benutzerdefiniert",
     }
     
-    if "cfg_batt_inverter_preset" not in st.session_state:
-        st.session_state.cfg_batt_inverter_preset = "median"
-    
-    current_preset = sv("cfg_batt_inverter_preset")
-    preset_index = list(_preset_options.keys()).index(current_preset) if current_preset in _preset_options else 1
+    _preset_keys = list(_preset_options.keys())
     
     st.selectbox(
         "📈 Batterie-WR-Wirkungsgradkurve",
-        options=list(_preset_options.keys()),
+        options=_preset_keys,
         format_func=lambda x: _preset_options[x],
-        index=preset_index,
         key="cfg_batt_inverter_preset",
         help="Wirkungsgrad des bidirektionalen Batterie-Wechselrichters (AC↔DC). "
              "Wird nur bei AC-gekoppelten Speichern benötigt. "
              "Bei DC-gekoppelten Speichern wird der PV-Wechselrichter verwendet.",
+        **selectbox_index("cfg_batt_inverter_preset", _preset_keys),
     )
     
     if sv("cfg_batt_inverter_preset") == "custom":
