@@ -729,7 +729,7 @@ def _render_data_attribution() -> None:
 def render_missing_config_message(missing: list[str]) -> None:
     """Render message when required configuration is missing."""
     st.title("☀️ SolarBatterYield - PV-Analyse mit Speichervergleich")
-    st.markdown("Eine interaktive Streamlit-App zur Simulation und Wirtschaftlichkeitsanalyse von Photovoltaik-Anlagen mit Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlagen.")
+    st.markdown("Interaktive App zur Simulation und Wirtschaftlichkeitsanalyse von Photovoltaik-Anlagen mit Batteriespeicher – optimiert für **Balkonkraftwerke**.")
     missing_list = "\n".join(f"- {m}" for m in missing)
     st.info(
         "Bitte konfiguriere mindestens folgende Parameter in der **Seitenleiste** (⚙️), "

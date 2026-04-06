@@ -8,7 +8,7 @@ import numpy as np
 import streamlit as st
 
 # Configure page first (must be first Streamlit command)
-st.set_page_config(page_title="SolarBatterYield", page_icon="☀️", layout="wide")
+st.set_page_config(page_title="SolarBatterYield - PV-Analyse mit Speichervergleich", page_icon="☀️", layout="wide")
 
 # Import application modules
 from solarbatteryield.api import get_pvgis_hourly, PVGISError, APIError
