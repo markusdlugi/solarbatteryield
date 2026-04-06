@@ -5,6 +5,14 @@ https://solarbatteryield.streamlit.app/
 Eine interaktive Streamlit-App zur Simulation und Wirtschaftlichkeitsanalyse von Photovoltaik-Anlagen mit
 Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlagen.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/app_screenshot_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/app_screenshot_light.png">
+    <img src="assets/app_screenshot_light.png" alt="App Screenshot" width="90%">
+  </picture>
+</p>
+
 ## Features
 
 - **PVGIS-Integration** – Stündliche PV-Ertragsdaten direkt von der EU-Datenbank (2005–2020)
@@ -22,9 +30,12 @@ Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlag
     - Werktagen, Samstagen und Sonn-/Feiertagen
     - Jahreszeiten (Winter, Frühling, Sommer, Herbst)
     - Deutsche Feiertage werden automatisch berücksichtigt
-- **Erweiterter Verbrauchsmodus** – Eigene stündliche Lastprofile mit optionaler Tagtyp-Differenzierung
-- **Lastverschiebung** – Optionale Zusatzlast an ertragreichen Sonnentagen (z. B. Waschmaschine)
-- **Periodische Zusatzlast** – Regelmäßiger Verbrauch unabhängig vom Wetter (z. B. Warmwasser-Desinfektion)
+- **Erweiterter Verbrauchsmodus** – Eigene stündliche Lastprofile inklusive:
+    - **Wochentag-Unterscheidung**: Unterschiedliche Profile für Werktage, Samstage und Sonn-/Feiertage
+    - **Saisonale Skalierung**: Automatische Anpassung der Lastprofile je nach Jahreszeit
+    - **Lastverschiebung** – Optionale Zusatzlast an ertragreichen Sonnentagen (z. B. Waschmaschine)
+    - **Periodische Zusatzlast** – Regelmäßiger Verbrauch unabhängig vom Wetter (z. B. Warmwasser-Desinfektion)
+- **Experten-Verbrauchsmodus** - Upload von eigenen Smart-Meter-Daten (CSV) für präzise Ergebnisse
 - **Einspeisevergütung** – Berücksichtigung der Vergütung in allen Wirtschaftlichkeitsberechnungen
 - **Mehrere Speicher-Szenarien** – Vergleich von „Ohne Speicher" bis zu beliebig vielen Batterie-Optionen
 - **Langzeitvergleich PV vs. ETF** – Kumulierte Rendite über konfigurierbare Laufzeit
@@ -34,13 +45,13 @@ Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlag
 
 Die Konfiguration erfolgt über die **Seitenleiste** in fünf aufklappbaren Abschnitten:
 
-| Abschnitt                 | Inhalt                                                                            |
-|---------------------------|-----------------------------------------------------------------------------------|
-| 📍 **Standort**           | Ort suchen oder Koordinaten manuell eingeben                                      |
-| 💡 **Verbrauch**          | Jahresverbrauch, Lastprofil, Lastverschiebung, periodische Zusatzlast             |
-| ⚡ **PV-System**           | PVGIS-Datenjahr, Systemverluste, Wechselrichter-Limit, Einspeisevergütung, Module |
-| 🔋 **Speicher**           | DC/AC-Kopplung, Lade-/Entladeverluste, SoC-Grenzen, Speicher-Optionen             |
-| 💰 **Preise & Vergleich** | Strompreis, Preissteigerung, ETF-Rendite, Analyse-Horizont                        |
+| Abschnitt                 | Inhalt                                                                         |
+|---------------------------|--------------------------------------------------------------------------------|
+| 📍 **Standort**           | Ort suchen oder Koordinaten manuell eingeben                                   |
+| 💡 **Verbrauch**          | Jahresverbrauch, Lastprofil, Lastverschiebung, periodische Zusatzlast          |
+| ⚡ **PV-System**           | PVGIS-Datenjahr, Systemverluste, Wechselrichter-Limit, Module                  |
+| 🔋 **Speicher**           | DC/AC-Kopplung, Lade-/Entladeverluste, SoC-Grenzen, Speicher-Optionen          |
+| 💰 **Preise & Vergleich** | Strompreis, Preissteigerung, Einspeisevergütung, ETF-Rendite, Analyse-Horizont |
 
 Nach Eingabe von **Standort** und **Jahresverbrauch** startet die Analyse automatisch.
 
@@ -68,7 +79,7 @@ Die Simulation läuft stündlich über ein volles Kalenderjahr (8.760 Stunden):
     1. Haushaltslast aus PV decken (durch Wechselrichter, ≤ WR-Limit)
     2. Batterie aus überschüssigem DC laden (kein WR-Limit)
     3. Rest über Wechselrichter ins Netz einspeisen (≤ verbleibende WR-Kapazität)
-    4. Deficit aus Batterie (durch WR) oder Netz
+    4. Defizit aus Batterie (durch WR) oder Netz
 
    **AC-gekoppelt**:
     1. Wechselrichter begrenzt gesamte PV-Leistung
