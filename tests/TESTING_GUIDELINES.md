@@ -130,6 +130,40 @@ def simulation_results(self):
     return {"regression": results_regression, "naive": results_naive}
 ```
 
+### Shared Fixtures (conftest.py)
+
+Common fixtures and helper functions are defined in `conftest.py` and automatically available to all test files:
+
+**Fixtures:**
+- `base_simulation_params` - SimulationParams with sensible defaults
+- `expert_mode_params` - SimulationParams configured for expert mode
+- `zero_pv_data` - 8760 hours of zero PV generation
+- `constant_pv_data` - 1kW constant PV generation
+- `daytime_pv_data` - 1kW PV during daytime hours (6-18)
+- `synthetic_pv_data` - Realistic PV with seasonal variation
+- `constant_load_profile` - 200W constant 24-hour profile
+- `realistic_load_profile` - Realistic daily consumption pattern
+
+**Factory Functions (importable from conftest):**
+```python
+from conftest import (
+    create_simulation_params,
+    create_constant_pv,
+    create_daytime_pv,
+    create_synthetic_pv_data,
+    create_realistic_load_profile,
+)
+
+# Use with custom parameters
+params = create_simulation_params(
+    profile_base=[300] * 24,
+    batt_loss_pct=15,
+)
+pv_data = create_daytime_pv(peak_kw=0.5, hours=744)
+```
+
+When a fixture is very specific to a single test module, keep it in that module rather than adding it to conftest.py.
+
 ## What to Test
 
 ### DO Test

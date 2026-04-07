@@ -27,6 +27,9 @@ from solarbatteryield.inverter_efficiency import (
     DEFAULT_INVERTER_EFFICIENCY_CURVE,
 )
 
+# Import shared helper functions from conftest
+from conftest import create_simulation_params
+
 
 class TestLocationConfig:
     """Tests for location configuration validation."""
@@ -418,7 +421,7 @@ class TestSimulationParams:
     def test_use_h0_profile_should_return_true_for_einfach_mode(self):
         """Should return True for use_h0_profile in Einfach mode."""
         # given
-        params = _create_test_params(profile_mode="Einfach")
+        params = create_simulation_params(profile_mode="Einfach")
 
         # when
         result = params.use_h0_profile()
@@ -429,7 +432,7 @@ class TestSimulationParams:
     def test_use_h0_profile_should_return_false_for_erweitert_mode(self):
         """Should return False for use_h0_profile in Erweitert mode."""
         # given
-        params = _create_test_params(profile_mode="Erweitert")
+        params = create_simulation_params(profile_mode="Erweitert")
 
         # when
         result = params.use_h0_profile()
@@ -440,7 +443,7 @@ class TestSimulationParams:
     def test_use_yearly_profile_should_return_true_for_experte_mode(self):
         """Should return True for use_yearly_profile in Experte mode with profile."""
         # given
-        params = _create_test_params(
+        params = create_simulation_params(
             profile_mode="Experte",
             yearly_profile=[100.0] * 8760,
         )
@@ -454,7 +457,7 @@ class TestSimulationParams:
     def test_use_yearly_profile_should_return_false_without_profile(self):
         """Should return False for use_yearly_profile when profile is None."""
         # given
-        params = _create_test_params(
+        params = create_simulation_params(
             profile_mode="Experte",
             yearly_profile=None,
         )
@@ -640,39 +643,6 @@ class TestAnalysisResult:
 
 # ─── Helper Functions ────────────────────────────────────────────────────────
 
-def _create_test_params(**overrides) -> SimulationParams:
-    """Create test SimulationParams with sensible defaults."""
-    defaults = dict(
-        batt_loss_pct=10,
-        dc_coupled=True,
-        min_soc_summer_pct=10,
-        min_soc_winter_pct=20,
-        max_soc_summer_pct=100,
-        max_soc_winter_pct=100,
-        data_year=2015,
-        inverter_limit_kw=0.8,
-        inverter_efficiency_curve=DEFAULT_INVERTER_EFFICIENCY_CURVE,
-        batt_inverter_efficiency_curve=DEFAULT_INVERTER_EFFICIENCY_CURVE,
-        profile_mode="Erweitert",
-        annual_kwh=3000,
-        profile_base=[200] * 24,
-        profile_saturday=None,
-        profile_sunday=None,
-        yearly_profile=None,
-        seasonal_enabled=False,
-        season_winter_pct=100,
-        season_summer_pct=100,
-        flex_load_enabled=False,
-        flex_min_yield=5.0,
-        flex_pool_size=3,
-        flex_delta=[0] * 24,
-        flex_refresh_rate=0.5,
-        periodic_load_enabled=False,
-        periodic_delta=[0] * 24,
-        periodic_interval_days=3,
-    )
-    defaults.update(overrides)
-    return SimulationParams(**defaults)
 
 
 def _create_scenario_result(

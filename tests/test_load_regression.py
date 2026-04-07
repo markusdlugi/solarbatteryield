@@ -10,15 +10,10 @@ Run with:  python -m pytest tests/ -v
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
 import pytest
-
-# Ensure project root is importable
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from solarbatteryield.load_regression import (
     get_direct_pv_fraction,
@@ -31,30 +26,27 @@ from solarbatteryield.models import SimulationParams
 from solarbatteryield.simulation import simulate
 from solarbatteryield.inverter_efficiency import INVERTER_EFFICIENCY_CURVES
 
+# Import shared helper functions from conftest
+from conftest import (
+    create_simulation_params,
+    create_synthetic_pv_data,
+)
 
-def _create_simulation_params() -> SimulationParams:
-    """Create standard simulation parameters for testing."""
-    return SimulationParams(
-        batt_loss_pct=10,
-        dc_coupled=True,
-        min_soc_summer_pct=10,
-        min_soc_winter_pct=20,
-        max_soc_summer_pct=100,
-        max_soc_winter_pct=100,
-        data_year=2015,
-        inverter_limit_kw=0.8,
-        inverter_efficiency_curve=INVERTER_EFFICIENCY_CURVES["median"],
-        batt_inverter_efficiency_curve=INVERTER_EFFICIENCY_CURVES["median"],
-        profile_mode="Erweitert",
+
+def _create_load_regression_params() -> SimulationParams:
+    """
+    Create simulation parameters specific to load regression tests.
+    
+    Uses a realistic variable load profile and enables seasonal/flex features
+    to test realistic scenarios.
+    """
+    return create_simulation_params(
         annual_kwh=2821,
         profile_base=[
             190, 170, 170, 170, 170, 170, 340, 220,
             230, 370, 260, 1040, 250, 220, 190, 200,
             200, 900, 410, 270, 860, 340, 190, 200,
         ],
-        profile_saturday=None,
-        profile_sunday=None,
-        yearly_profile=None,
         seasonal_enabled=True,
         season_winter_pct=114,
         season_summer_pct=86,
@@ -76,19 +68,6 @@ def _create_simulation_params() -> SimulationParams:
         periodic_interval_days=3,
     )
 
-
-def _generate_synthetic_pv_data(hours: int = 8760, seed: int = 42) -> np.ndarray:
-    """Generate realistic synthetic PV generation data."""
-    rng = np.random.RandomState(seed)
-    pv = np.zeros(hours)
-    for i in range(hours):
-        hour = i % 24
-        day = i // 24
-        if 6 <= hour <= 20:
-            solar_angle = np.sin(np.pi * (hour - 6) / 14)
-            season_factor = 0.5 + 0.5 * np.sin(2 * np.pi * (day - 80) / 365)
-            pv[i] = max(0, solar_angle * season_factor * 0.6 + rng.normal(0, 0.02))
-    return pv
 
 
 def _naive_fraction(load_w: float, pv_w: float) -> float:
@@ -262,8 +241,8 @@ class TestSimulationWithRegression:
     @pytest.fixture(scope="class")
     def simulation_results(self):
         """Run simulations with and without regression for comparison."""
-        pv_data = _generate_synthetic_pv_data()
-        params = _create_simulation_params()
+        pv_data = create_synthetic_pv_data(peak_power_kw=0.6)
+        params = _create_load_regression_params()
         battery_capacities = [0.0, 2.11, 4.22]
 
         results_regression = {}

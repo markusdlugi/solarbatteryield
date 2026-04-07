@@ -6,6 +6,7 @@ where users provide a complete yearly hourly load profile instead of using
 standard profiles or custom daily patterns.
 """
 import pytest
+import numpy as np
 
 from solarbatteryield.models import (
     SimulationConfig, ConsumptionConfig, LocationConfig,
@@ -13,39 +14,19 @@ from solarbatteryield.models import (
 )
 from solarbatteryield.inverter_efficiency import DEFAULT_INVERTER_EFFICIENCY_CURVE
 from solarbatteryield.simulation import simulate
-import numpy as np
+
+# Import shared helper functions from conftest
+from conftest import create_simulation_params
 
 
 def _create_expert_params(yearly_profile: list[float] | None = None) -> SimulationParams:
     """Create SimulationParams configured for expert mode."""
-    return SimulationParams(
-        batt_loss_pct=10,
-        dc_coupled=True,
-        min_soc_summer_pct=10,
-        min_soc_winter_pct=20,
-        max_soc_summer_pct=100,
-        max_soc_winter_pct=100,
-        data_year=2015,
-        inverter_limit_kw=0.8,
+    return create_simulation_params(
         inverter_efficiency_curve=((10, 0.91), (100, 0.96)),
         batt_inverter_efficiency_curve=DEFAULT_INVERTER_EFFICIENCY_CURVE,
         profile_mode="Experte",
         annual_kwh=None,
-        profile_base=[100] * 24,
-        profile_saturday=None,
-        profile_sunday=None,
         yearly_profile=yearly_profile,
-        seasonal_enabled=False,
-        season_winter_pct=100,
-        season_summer_pct=100,
-        flex_load_enabled=False,
-        flex_min_yield=5.0,
-        flex_pool_size=3,
-        flex_delta=[0] * 24,
-        flex_refresh_rate=0.5,
-        periodic_load_enabled=False,
-        periodic_delta=[0] * 24,
-        periodic_interval_days=3,
     )
 
 
