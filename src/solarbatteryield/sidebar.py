@@ -23,8 +23,10 @@ def render_sidebar() -> None:
     
     _render_location_section()
     _render_consumption_section()
-    _render_pv_system_section()
-    _render_storage_section()
+    _render_pv_modules_section()
+    _render_pv_config_section()
+    _render_storage_options_section()
+    _render_storage_config_section()
     _render_prices_section()
 
 
@@ -440,9 +442,45 @@ def _render_periodic_load_settings() -> None:
             st.rerun()
 
 
-def _render_pv_system_section() -> None:
+def _render_pv_modules_section() -> None:
+    """Render the PV modules configuration section."""
+    with st.sidebar.expander("☀️ PV-Module"):
+        modules = st.session_state.modules
+        for i, mod in enumerate(modules):
+            mid = mod["id"]
+            with st.expander(f"**{mod['name']}** – {mod['peak']} kWp"):
+                modules[i]["name"] = st.text_input("Name", value=mod["name"], key=f"mn_{mid}")
+                modules[i]["peak"] = st.number_input(
+                    "Leistung (kWp)", value=mod["peak"], step=0.1, min_value=0.1,
+                    format="%.2f", key=f"mp_{mid}",
+                )
+                modules[i]["azi"] = st.number_input(
+                    "Azimut (°)", value=mod["azi"], step=5,
+                    help="0 = Süd, 90 = West, -90 = Ost", key=f"ma_{mid}",
+                )
+                modules[i]["slope"] = st.slider(
+                    "Neigung (°)", 0, 90, mod["slope"], key=f"ms_{mid}",
+                    help="0° = horizontal (flach), 90° = vertikal (senkrecht an der Wand)",
+                )
+                if len(modules) > 1 and st.button("🗑️ Modul entfernen", key=f"md_{mid}"):
+                    modules.pop(i)
+                    st.rerun()
+        if st.button("➕ Modul hinzufügen"):
+            modules.append({
+                "id": st.session_state.next_mod_id,
+                "name": f"Modul {len(modules) + 1}",
+                "peak": 0.5, "azi": 0, "slope": 30,
+            })
+            st.session_state.next_mod_id += 1
+            st.rerun()
+        st.divider()
+        st.number_input("Kosten PV-System ohne Speicher (€)", step=50, key="cfg_base_cost",
+                        **widget_value("cfg_base_cost"))
+
+
+def _render_pv_config_section() -> None:
     """Render the PV system configuration section."""
-    with st.sidebar.expander("⚡ PV-System"):
+    with st.sidebar.expander("⚡ PV-Konfiguration"):
         _year_options = list(range(LIMITS.year_min, LIMITS.year_max + 1))
         st.selectbox("PVGIS-Datenjahr", _year_options,
                      key="cfg_year",
@@ -467,10 +505,6 @@ def _render_pv_system_section() -> None:
                 key="cfg_inverter_limit_w",
                 help="Maximale AC-Ausgangsleistung des Wechselrichters in Watt.",
                 **widget_value("cfg_inverter_limit_w"))
-        st.number_input("Kosten PV-System ohne Speicher (€)", step=50, key="cfg_base_cost",
-                        **widget_value("cfg_base_cost"))
-        st.divider()
-        _render_modules_config()
 
 
 def _render_inverter_efficiency_section() -> None:
@@ -559,42 +593,38 @@ def _show_efficiency_curve_info(preset: str) -> None:
     st.caption(f"η: {eff_10:.1f}% (10%) → {eff_50:.1f}% (50%) → {eff_100:.1f}% (100%)")
 
 
-def _render_modules_config() -> None:
-    """Render PV modules configuration."""
-    st.markdown("**Module**")
-    modules = st.session_state.modules
-    for i, mod in enumerate(modules):
-        mid = mod["id"]
-        with st.expander(f"**{mod['name']}** – {mod['peak']} kWp"):
-            modules[i]["name"] = st.text_input("Name", value=mod["name"], key=f"mn_{mid}")
-            modules[i]["peak"] = st.number_input(
-                "Leistung (kWp)", value=mod["peak"], step=0.1, min_value=0.1,
-                format="%.2f", key=f"mp_{mid}",
-            )
-            modules[i]["azi"] = st.number_input(
-                "Azimut (°)", value=mod["azi"], step=5,
-                help="0 = Süd, 90 = West, -90 = Ost", key=f"ma_{mid}",
-            )
-            modules[i]["slope"] = st.slider(
-                "Neigung (°)", 0, 90, mod["slope"], key=f"ms_{mid}",
-                help="0° = horizontal (flach), 90° = vertikal (senkrecht an der Wand)",
-            )
-            if len(modules) > 1 and st.button("🗑️ Modul entfernen", key=f"md_{mid}"):
-                modules.pop(i)
-                st.rerun()
-    if st.button("➕ Modul hinzufügen"):
-        modules.append({
-            "id": st.session_state.next_mod_id,
-            "name": f"Modul {len(modules) + 1}",
-            "peak": 0.5, "azi": 0, "slope": 30,
-        })
-        st.session_state.next_mod_id += 1
-        st.rerun()
+def _render_storage_options_section() -> None:
+    """Render the storage options section."""
+    with st.sidebar.expander("🔋 Speicher-Optionen"):
+        storages = st.session_state.storages
+        for i, stor in enumerate(storages):
+            sid = stor["id"]
+            with st.expander(f"**{stor['name']}** – {stor['cap']} kWh"):
+                storages[i]["name"] = st.text_input("Name", value=stor["name"], key=f"sn_{sid}")
+                storages[i]["cap"] = st.number_input(
+                    "Kapazität (kWh)", value=stor["cap"], step=0.1, min_value=0.1,
+                    format="%.2f", key=f"sc_{sid}",
+                )
+                storages[i]["cost"] = st.number_input(
+                    "Aufpreis ggü. Basis-System (€)", value=stor["cost"], step=50,
+                    min_value=0, key=f"sp_{sid}",
+                )
+                if st.button("🗑️ Speicher-Option entfernen", key=f"sd_{sid}"):
+                    storages.pop(i)
+                    st.rerun()
+        if st.button("➕ Speicher-Option hinzufügen"):
+            storages.append({
+                "id": st.session_state.next_stor_id,
+                "name": f"Speicher {len(storages) + 1}",
+                "cap": 2.0, "cost": 500,
+            })
+            st.session_state.next_stor_id += 1
+            st.rerun()
 
 
-def _render_storage_section() -> None:
+def _render_storage_config_section() -> None:
     """Render the storage configuration section."""
-    with st.sidebar.expander("🔋 Speicher"):
+    with st.sidebar.expander("🪫 Speicher-Konfiguration"):
         _coupling_options = ["DC-gekoppelt", "AC-gekoppelt"]
         st.radio(
             "Speicheranbindung", _coupling_options, horizontal=True,
@@ -678,8 +708,6 @@ def _render_storage_section() -> None:
                   on_change=_on_max_soc_w_change,
                   help="Kann nicht niedriger als Min. Ladezustand sein.",
                   **widget_value("cfg_max_soc_w"))
-        st.divider()
-        _render_storages_config()
 
 
 def _render_batt_inverter_efficiency_section() -> None:
@@ -743,35 +771,6 @@ def _render_batt_inverter_custom_editor() -> None:
     new_values = edited_eff["Wirkungsgrad (%)"].tolist()
     if new_values != st.session_state._batt_inverter_eff_custom:
         st.session_state._batt_inverter_eff_custom = new_values
-        st.rerun()
-
-
-def _render_storages_config() -> None:
-    """Render storage options configuration."""
-    st.markdown("**Ausbaustufen**")
-    storages = st.session_state.storages
-    for i, stor in enumerate(storages):
-        sid = stor["id"]
-        with st.expander(f"**{stor['name']}** – {stor['cap']} kWh"):
-            storages[i]["name"] = st.text_input("Name", value=stor["name"], key=f"sn_{sid}")
-            storages[i]["cap"] = st.number_input(
-                "Kapazität (kWh)", value=stor["cap"], step=0.1, min_value=0.1,
-                format="%.2f", key=f"sc_{sid}",
-            )
-            storages[i]["cost"] = st.number_input(
-                "Aufpreis ggü. Basis-System (€)", value=stor["cost"], step=50,
-                min_value=0, key=f"sp_{sid}",
-            )
-            if st.button("🗑️ Speicher entfernen", key=f"sd_{sid}"):
-                storages.pop(i)
-                st.rerun()
-    if st.button("➕ Speicher-Option hinzufügen"):
-        storages.append({
-            "id": st.session_state.next_stor_id,
-            "name": f"Speicher {len(storages) + 1}",
-            "cap": 2.0, "cost": 500,
-        })
-        st.session_state.next_stor_id += 1
         st.rerun()
 
 

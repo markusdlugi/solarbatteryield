@@ -43,15 +43,20 @@ Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlag
 
 ## Bedienung
 
-Die Konfiguration erfolgt über die **Seitenleiste** in fünf aufklappbaren Abschnitten:
+Die Konfiguration erfolgt über die **Seitenleiste** in sieben aufklappbaren Abschnitten:
 
-| Abschnitt                 | Inhalt                                                                         |
-|---------------------------|--------------------------------------------------------------------------------|
-| 📍 **Standort**           | Ort suchen oder Koordinaten manuell eingeben                                   |
-| 💡 **Verbrauch**          | Jahresverbrauch, Lastprofil, Lastverschiebung, periodische Zusatzlast          |
-| ⚡ **PV-System**           | PVGIS-Datenjahr, Systemverluste, Wechselrichter-Limit, Module                  |
-| 🔋 **Speicher**           | DC/AC-Kopplung, Lade-/Entladeverluste, SoC-Grenzen, Speicher-Optionen          |
-| 💰 **Preise & Vergleich** | Strompreis, Preissteigerung, Einspeisevergütung, ETF-Rendite, Analyse-Horizont |
+| Abschnitt                      | Inhalt                                                                         |
+|--------------------------------|--------------------------------------------------------------------------------|
+| 📍 **Standort**                | Ort suchen oder Koordinaten manuell eingeben                                   |
+| 💡 **Verbrauch**               | Jahresverbrauch, Lastprofil, Lastverschiebung, periodische Zusatzlast          |
+| ☀️ **PV-Module**               | Module (Leistung, Ausrichtung, Neigung), Systemkosten                          |
+| ⚡ **PV-Konfiguration**         | PVGIS-Datenjahr, Systemverluste, WR-Wirkungsgrad, Wechselrichter-Limit         |
+| 🔋 **Speicher-Optionen**       | Ausbaustufen (Kapazität, Aufpreis)                                             |
+| 🪫 **Speicher-Konfiguration**  | DC/AC-Kopplung, Batterie-WR, Lade-/Entladeverluste, SoC-Grenzen                |
+| 💰 **Preise & Vergleich**      | Strompreis, Preissteigerung, Einspeisevergütung, ETF-Rendite, Analyse-Horizont |
+
+Die Abschnitte **PV-Module** und **Speicher-Optionen** enthalten die häufig angepassten Einstellungen,
+während **PV-Konfiguration** und **Speicher-Konfiguration** die technischen Details bündeln.
 
 Nach Eingabe von **Standort** und **Jahresverbrauch** startet die Analyse automatisch.
 
