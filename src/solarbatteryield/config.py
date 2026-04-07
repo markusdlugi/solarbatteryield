@@ -185,7 +185,25 @@ SESSION_STATE_DEFAULTS: dict[str, Any] = {
 # ─── Config keys for URL sharing ───────────────────────────────
 CONFIG_KEYS_SIMPLE: list[str] = list(SESSION_STATE_DEFAULTS.keys())
 
-# Keys that need persistence when widgets are collapsed
+# Keys for conditionally rendered widgets that must NOT be pre-initialized
+# in session state. This allows widget_value() to pass their default as an
+# explicit 'value' parameter on first render, which prevents Streamlit from
+# ignoring the intended default when it creates the widget for the first time.
+# This applies to all widgets that are hidden behind a toggle or mode switch
+# and may appear/disappear during the session.
+LAZY_INIT_KEYS: frozenset[str] = frozenset({
+    # Behind "Erweitert" profile mode
+    "cfg_seasonal_enabled", "cfg_season_winter", "cfg_season_summer",
+    # Behind cfg_flex_enabled toggle
+    "cfg_flex_min_yield", "cfg_flex_pool", "cfg_flex_refresh",
+    # Behind cfg_periodic_enabled toggle
+    "cfg_periodic_days",
+    # Behind cfg_inverter_limit_enabled toggle
+    "cfg_inverter_limit_w",
+    # Behind cfg_dc_coupled == "AC-gekoppelt"
+    "cfg_batt_inverter_preset",
+})
+
 PERSISTED_KEYS: list[str] = [
     "cfg_lat", "cfg_lon", "cfg_profile_mode", "cfg_annual_kwh",
     "cfg_flex_enabled", "cfg_flex_min_yield", "cfg_flex_pool", "cfg_flex_refresh",

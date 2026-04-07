@@ -8,7 +8,7 @@ import zlib
 import streamlit as st
 
 from solarbatteryield.config import (
-    CONFIG_KEYS_SIMPLE, PERSISTED_KEYS, PROFILE_BASE,
+    CONFIG_KEYS_SIMPLE, PERSISTED_KEYS, LAZY_INIT_KEYS, PROFILE_BASE,
     FLEX_DELTA_DEFAULT, PERIODIC_DELTA_DEFAULT, DEFAULT_MODULES, DEFAULT_STORAGES,
     SESSION_STATE_DEFAULTS
 )
@@ -20,6 +20,12 @@ def encode_config() -> str:
     for k in CONFIG_KEYS_SIMPLE:
         if k in st.session_state:
             data[k] = st.session_state[k]
+        elif k in LAZY_INIT_KEYS:
+            # LAZY_INIT_KEYS are popped by widget_value() before widgets render,
+            # so they may only exist as backups at encoding time.
+            _bak = f"_bak_{k}"
+            if _bak in st.session_state:
+                data[k] = st.session_state[_bak]
     data["modules"] = st.session_state.modules
     data["storages"] = st.session_state.storages
     data["next_mod_id"] = st.session_state.next_mod_id
@@ -103,8 +109,12 @@ def init_session_state() -> None:
     # Pre-initialize all config keys with their defaults to avoid
     # "dictionary changed size during iteration" errors when widgets
     # try to initialize them during render.
+    # Exception: LAZY_INIT_KEYS are skipped here so that widget_value()
+    # can pass their default as an explicit 'value' parameter on first
+    # render – this prevents Streamlit from ignoring the intended default
+    # when it creates a conditionally-rendered widget for the first time.
     for key, default in SESSION_STATE_DEFAULTS.items():
-        if key not in st.session_state:
+        if key not in st.session_state and key not in LAZY_INIT_KEYS:
             st.session_state[key] = default
 
     # Initialize modules (deep copy to avoid sharing dicts between sessions)
@@ -129,12 +139,16 @@ def init_session_state() -> None:
     if "_prev_profile_mode" not in st.session_state:
         st.session_state._prev_profile_mode = sv("cfg_profile_mode")
 
-    # Persist widget values when expanders are collapsed
+    # Persist widget values when expanders are collapsed.
+    # For LAZY_INIT_KEYS: only backup, do NOT restore into session state.
+    # Restoring would cause widget_value() to return {} and Streamlit would
+    # ignore the value on re-render.  Instead, widget_value() / selectbox_index()
+    # read the backup directly when the key is missing from session state.
     for _k in PERSISTED_KEYS:
         _bk = f"_bak_{_k}"
         if _k in st.session_state:
             st.session_state[_bk] = st.session_state[_k]
-        elif _bk in st.session_state:
+        elif _bk in st.session_state and _k not in LAZY_INIT_KEYS:
             st.session_state[_k] = st.session_state[_bk]
 
 
@@ -142,44 +156,72 @@ def sv(key: str, default=None):
     """
     Read a value from session state with a fallback default.
     
-    If default is None, looks up the centralized default from SESSION_STATE_DEFAULTS.
+    Lookup order:
+    1. Session state (widget-managed value)
+    2. Backup from persistence mechanism (for conditionally rendered widgets)
+    3. Centralized default from SESSION_STATE_DEFAULTS
+    4. Explicit default parameter
     """
+    if key in st.session_state:
+        return st.session_state[key]
+    _bak = f"_bak_{key}"
+    if _bak in st.session_state:
+        return st.session_state[_bak]
     if default is None:
         default = SESSION_STATE_DEFAULTS.get(key)
-    return st.session_state.get(key, default)
+    return default
 
 
 def widget_value(key: str, default=None) -> dict:
-    """Return dict with 'value' only if key not already in session state.
+    """Return dict with 'value' for widget initialisation.
     
-    This prevents 'widget created with default value but also had value set via Session State API' errors
-    when values are restored from deep links or other session state manipulations.
+    For normal keys: returns 'value' only when the key is absent from session state
+    (prevents Streamlit's "default value vs session state" error).
     
-    If default is None, looks up the centralized default from SESSION_STATE_DEFAULTS.
+    For LAZY_INIT_KEYS (conditionally rendered widgets): the key is *always* popped
+    from session state and returned as an explicit 'value'.  This is necessary because
+    Streamlit does not reliably apply session-state values to widgets that reappear
+    after having been hidden.  By popping the key we force Streamlit to treat the
+    widget as new and honour the provided default.
     """
     if key in st.session_state:
+        if key in LAZY_INIT_KEYS:
+            val = st.session_state.pop(key)
+            st.session_state[f"_bak_{key}"] = val      # keep backup current
+            return {"value": val}
         return {}
+    # Key not in session state – check backup, then fall back to default
+    _bak = f"_bak_{key}"
+    if _bak in st.session_state:
+        return {"value": st.session_state[_bak]}
     if default is None:
         default = SESSION_STATE_DEFAULTS.get(key)
     return {"value": default}
 
 
 def selectbox_index(key: str, options: list, default=None) -> dict:
-    """Return dict with 'index' only if key not already in session state.
+    """Return dict with 'index' for selectbox/radio widget initialisation.
     
-    For selectbox widgets, the default is set via 'index' parameter, not 'value'.
-    This helper computes the index from the current session state value or default.
-    
-    Args:
-        key: The session state key for the widget
-        options: List of options for the selectbox
-        default: Default value (looked up from SESSION_STATE_DEFAULTS if None)
-        
-    Returns:
-        Empty dict if key in session state, otherwise {"index": computed_index}
+    Same pop-semantics as widget_value() for LAZY_INIT_KEYS.
     """
     if key in st.session_state:
-        return {}
+        if key in LAZY_INIT_KEYS:
+            val = st.session_state.pop(key)
+            st.session_state[f"_bak_{key}"] = val
+            try:
+                return {"index": options.index(val)}
+            except (ValueError, TypeError):
+                pass
+        else:
+            return {}
+    # Key not in session state – check backup, then fall back to default
+    _bak = f"_bak_{key}"
+    if _bak in st.session_state:
+        val = st.session_state[_bak]
+        try:
+            return {"index": options.index(val)}
+        except (ValueError, TypeError):
+            pass
     if default is None:
         default = SESSION_STATE_DEFAULTS.get(key)
     try:
