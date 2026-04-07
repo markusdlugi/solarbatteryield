@@ -141,15 +141,18 @@ jobs:
           echo "Generated changelog:"
           cat /tmp/changelog.md
 
-      - name: Update version in pyproject.toml
+      - name: Update version in pyproject.toml and uv.lock
         if: steps.bump.outputs.bump != 'none'
         run: |
           NEW_VERSION="${{ steps.new_version.outputs.new_version }}"
           sed -i "s/version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
           
+          # Update uv.lock to reflect the new version
+          uv lock
+          
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml
+          git add pyproject.toml uv.lock
           git commit -m "chore(release): v$NEW_VERSION"
           git push
 
