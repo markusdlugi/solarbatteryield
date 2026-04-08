@@ -4,12 +4,22 @@ Handles PVGIS data fetching and geocoding via OpenStreetMap.
 """
 from __future__ import annotations
 
+import os
 import time
 from typing import TypeVar
 
 import numpy as np
 import requests
 import streamlit as st
+
+
+# Nominatim contact email (recommended by usage policy to avoid blocks)
+# https://operations.osmfoundation.org/policies/nominatim/
+NOMINATIM_EMAIL = os.environ.get("NOMINATIM_EMAIL", "")
+
+# Geocoding is disabled by default for local development to avoid rate limiting.
+# Set NOMINATIM_ENABLED=true to enable (requires NOMINATIM_EMAIL to be set).
+NOMINATIM_ENABLED = os.environ.get("NOMINATIM_ENABLED", "").lower() in ("true", "1", "yes")
 
 
 # ─── Custom Exceptions ─────────────────────────────────────────
@@ -41,6 +51,23 @@ class GeocodingError(APIError):
 class ConfigurationError(PVAnalysisError):
     """Exception raised when configuration is invalid."""
     pass
+
+
+def _check_nominatim_enabled() -> None:
+    """
+    Check if Nominatim geocoding is properly configured.
+    
+    Raises:
+        GeocodingError: If geocoding is disabled or email is not configured.
+    """
+    if not NOMINATIM_ENABLED:
+        raise GeocodingError(
+            "Geocoding ist deaktiviert. Setze NOMINATIM_ENABLED=true um es zu aktivieren."
+        )
+    if not NOMINATIM_EMAIL:
+        raise GeocodingError(
+            "NOMINATIM_EMAIL muss gesetzt sein, wenn Geocoding aktiviert ist."
+        )
 
 
 # ─── Retry Logic ───────────────────────────────────────────────
@@ -201,8 +228,44 @@ def get_pvgis_hourly(
         raise PVGISError(f"Unerwartetes Datenformat: {e}")
 
 
+def _extract_place_name(address: dict, display_name: str) -> str:
+    """
+    Extract a short, readable place name from Nominatim address data.
+    
+    Nominatim returns structured address data with fields like 'city', 'town',
+    'village', etc. This function extracts the most relevant place name.
+    
+    Args:
+        address: Nominatim address object (from addressdetails=1)
+        display_name: Fallback display_name if no city found
+        
+    Returns:
+        Short place name like "München, Bayern" or just "München"
+    """
+    city = (
+        address.get("city") or 
+        address.get("town") or 
+        address.get("village") or 
+        address.get("municipality") or
+        address.get("county")
+    )
+    state = address.get("state", "")
+    
+    if city:
+        return f"{city}, {state}" if state else city
+    
+    # Fallback: first part of display_name (but skip house numbers)
+    parts = [p.strip() for p in display_name.split(",")]
+    # Skip parts that look like house numbers or postal codes
+    for part in parts:
+        if part and not part[0].isdigit():
+            return part
+    
+    return parts[0] if parts else display_name
+
+
 @st.cache_data(show_spinner=False)
-def geocode(query: str) -> tuple[str, float, float] | None:
+def geocode(query: str) -> tuple[str, str, float, float] | None:
     """
     Look up coordinates for a place name via Nominatim.
     
@@ -210,21 +273,33 @@ def geocode(query: str) -> tuple[str, float, float] | None:
         query: Place name to search for
         
     Returns:
-        Tuple of (display_name, lat, lon) or None if not found
+        Tuple of (display_name, short_place_name, lat, lon) or None if not found.
+        - display_name: Full address string from Nominatim
+        - short_place_name: Short readable name like "München, Bayern"
         
     Raises:
-        GeocodingError: If the API request fails (not for "not found")
+        GeocodingError: If geocoding is disabled, email not configured,
+                        or the API request fails (not for "not found")
     """
     if not query or not query.strip():
         return None
     
-    retry_config = RetryConfig(max_retries=2, base_delay=1.0)
+    _check_nominatim_enabled()
+    
+    retry_config = RetryConfig(max_retries=2, base_delay=2.0)
+    params = {
+        "q": query, 
+        "format": "json", 
+        "limit": 1, 
+        "addressdetails": 1,
+        "email": NOMINATIM_EMAIL,
+    }
     
     try:
         response = _retry_with_backoff(
             lambda: requests.get(
                 "https://nominatim.openstreetmap.org/search",
-                params={"q": query, "format": "json", "limit": 1},
+                params=params,
                 headers={"User-Agent": "solarbatteryield-streamlit/1.0"},
                 timeout=10,
             ),
@@ -237,7 +312,10 @@ def geocode(query: str) -> tuple[str, float, float] | None:
         
         if results:
             r = results[0]
-            return r.get("display_name", query), float(r["lat"]), float(r["lon"])
+            display_name = r.get("display_name", query)
+            address = r.get("address", {})
+            short_name = _extract_place_name(address, display_name)
+            return display_name, short_name, float(r["lat"]), float(r["lon"])
         
         return None
         
@@ -259,41 +337,40 @@ def reverse_geocode(lat: float, lon: float) -> str | None:
         lon: Longitude
         
     Returns:
-        Place name string or None if lookup fails
+        Place name string or None if lookup fails or geocoding is disabled
         
     Note:
         This function catches all exceptions and returns None on failure
-        to avoid disrupting the main application flow.
+        to avoid disrupting the main application flow. If geocoding is
+        disabled or not properly configured, it silently returns None.
     """
+    # Return None if geocoding is disabled or not properly configured
+    if not NOMINATIM_ENABLED or not NOMINATIM_EMAIL:
+        return None
+    
+    params = {
+        "lat": lat, 
+        "lon": lon, 
+        "format": "json", 
+        "zoom": 10, 
+        "accept-language": "de",
+        "email": NOMINATIM_EMAIL,
+    }
+    
     try:
         response = requests.get(
             "https://nominatim.openstreetmap.org/reverse",
-            params={
-                "lat": lat, 
-                "lon": lon, 
-                "format": "json", 
-                "zoom": 10, 
-                "accept-language": "de"
-            },
+            params=params,
             headers={"User-Agent": "solarbatteryield-streamlit/1.0"},
             timeout=10,
         )
         response.raise_for_status()
         
         data = response.json()
-        addr = data.get("address", {})
-        city = (
-            addr.get("city") or 
-            addr.get("town") or 
-            addr.get("village") or 
-            addr.get("municipality")
-        )
-        state = addr.get("state", "")
+        address = data.get("address", {})
+        display_name = data.get("display_name", "")
         
-        if city:
-            return f"{city}, {state}" if state else city
-        
-        return data.get("display_name", "").split(",")[0] or None
+        return _extract_place_name(address, display_name)
         
     except Exception:
         # Silently fail - this is non-critical functionality

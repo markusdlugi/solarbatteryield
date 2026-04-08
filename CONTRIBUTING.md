@@ -30,6 +30,25 @@ uv sync --dev
 uv run streamlit run src/solarbatteryield/streamlit_app.py
 ```
 
+### Konfiguration (optional)
+
+| Umgebungsvariable   | Beschreibung                                                                                                 | Default |
+|---------------------|--------------------------------------------------------------------------------------------------------------|---------|
+| `NOMINATIM_ENABLED` | Aktiviert Geocoding (Ortssuche). Standardmäßig deaktiviert, um Rate-Limits bei der Entwicklung zu vermeiden. | `false` |
+| `NOMINATIM_EMAIL`   | E-Mail-Adresse für Nominatim-Anfragen. **Pflicht**, wenn Geocoding aktiviert ist.                            | –       |
+
+> **Hinweis:** Das Geocoding ist bewusst standardmäßig deaktiviert. Wenn `NOMINATIM_ENABLED=true` gesetzt wird,
+> aber `NOMINATIM_EMAIL` fehlt, wirft die App einen Fehler. Dies verhindert, dass Requests ohne E-Mail-Adresse
+> gesendet werden, was zu Blockierungen durch Nominatim führen kann.
+
+Beispiel:
+
+```bash
+export NOMINATIM_ENABLED=true
+export NOMINATIM_EMAIL="your-email@example.com"
+uv run streamlit run src/solarbatteryield/streamlit_app.py
+```
+
 ### Tests ausführen
 
 ```bash
@@ -68,33 +87,36 @@ Release Notes.
 
 ## Typen und ihre Auswirkung auf die Version
 
-| Typ               | Beschreibung                                        | Version-Bump |
-|-------------------|-----------------------------------------------------|--------------|
-| `feat:`           | Neues Feature für Nutzer                            | **Minor**    |
-| `fix:`            | Bugfix für Nutzer                                   | **Patch**    |
-| `perf:`           | Performance-Verbesserung                            | **Patch**    |
-| `refactor:`       | Code-Änderung ohne Funktionsänderung                | **Patch**    |
-| `docs:`           | Nur Dokumentation                                   | Kein Release |
-| `style:`          | Formatierung, Whitespace, etc.                      | Kein Release |
-| `test:`           | Tests hinzufügen/ändern                             | Kein Release |
-| `chore:`          | Build-Prozess, Dependencies, etc.                   | Kein Release |
-| `ci:`             | CI/CD-Änderungen                                    | Kein Release |
-| `build:`          | Build-System oder externe Dependencies              | Kein Release |
-| `BREAKING CHANGE` | Breaking Change (im Footer oder mit `!` nach Type)  | **Major**    |
+| Typ               | Beschreibung                                       | Version-Bump |
+|-------------------|----------------------------------------------------|--------------|
+| `feat:`           | Neues Feature für Nutzer                           | **Minor**    |
+| `fix:`            | Bugfix für Nutzer                                  | **Patch**    |
+| `perf:`           | Performance-Verbesserung                           | **Patch**    |
+| `refactor:`       | Code-Änderung ohne Funktionsänderung               | **Patch**    |
+| `docs:`           | Nur Dokumentation                                  | Kein Release |
+| `style:`          | Formatierung, Whitespace, etc.                     | Kein Release |
+| `test:`           | Tests hinzufügen/ändern                            | Kein Release |
+| `chore:`          | Build-Prozess, Dependencies, etc.                  | Kein Release |
+| `ci:`             | CI/CD-Änderungen                                   | Kein Release |
+| `build:`          | Build-System oder externe Dependencies             | Kein Release |
+| `BREAKING CHANGE` | Breaking Change (im Footer oder mit `!` nach Type) | **Major**    |
 
 ## Beispiele
 
 ### Feature (Minor Version Bump: 1.0.0 → 1.1.0)
+
 ```
 feat(simulation): add support for AC-coupled batteries
 ```
 
 ### Bugfix (Patch Version Bump: 1.0.0 → 1.0.1)
+
 ```
 fix(api): handle PVGIS timeout gracefully
 ```
 
 ### Breaking Change (Major Version Bump: 1.0.0 → 2.0.0)
+
 ```
 feat(models)!: change ModuleConfig to use dataclass
 
@@ -110,6 +132,7 @@ BREAKING CHANGE: Simulation results now use different field names.
 ```
 
 ### Kein Release
+
 ```
 docs: update README with new screenshots
 
@@ -134,6 +157,7 @@ refactor(models): extract common validation logic
 ## Mehrere Änderungen
 
 Bei mehreren Änderungen in einem Commit gilt die "höchste" Änderung:
+
 - BREAKING CHANGE > feat > fix/perf/refactor > andere
 
 **Empfehlung:** Mache kleine, fokussierte Commits mit einem klaren Typ.
@@ -149,6 +173,7 @@ Bei jedem Push auf `master`:
 5. **GitHub Release** wird erstellt mit Tag
 
 ### Kein Release bei:
+
 - `docs:`, `style:`, `test:`, `chore:`, `ci:`, `build:` Commits
 - Commits ohne Conventional-Commit-Prefix
 - `chore(release):` Commits (um Endlosschleifen zu vermeiden)

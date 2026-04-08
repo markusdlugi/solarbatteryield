@@ -42,8 +42,8 @@ def _render_location_section() -> None:
             try:
                 result = geocode(location_query)
                 if result:
-                    display_name, found_lat, found_lon = result
-                    st.session_state._location_display_name = display_name
+                    display_name, short_place_name, found_lat, found_lon = result
+                    st.session_state._location_display_name = short_place_name
                     if st.session_state.get("_last_geo_query") != location_query:
                         st.session_state.cfg_lat = found_lat
                         st.session_state.cfg_lon = found_lon

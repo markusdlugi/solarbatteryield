@@ -8,15 +8,26 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from solarbatteryield.api import reverse_geocode
 from solarbatteryield.config import MONTH_LABELS, COLORS
-from solarbatteryield.models import SimulationConfig, AnalysisResult, ScenarioResult
 from solarbatteryield.utils import (
     de, de_styler, color_pos_neg, color_amort, color_rendite,
     color_autarkie, color_eigenverbrauch, color_vollzyklen, build_yearly_data,
     find_breakeven, calc_amortization_with_price_increase
 )
 from solarbatteryield.state import encode_config
+
+
+def _get_short_place_name() -> str | None:
+    """
+    Get a short, readable place name from session state.
+
+    The location name is stored in session state by the sidebar,
+    either from geocoding (forward lookup) or reverse geocoding.
+
+    Returns:
+        Short place name like "München, Bayern" or None if not available.
+    """
+    return st.session_state.get("_location_display_name")
 
 
 class Report:
@@ -70,7 +81,7 @@ class Report:
     def _render_header(self) -> None:
         """Render the main header section with key metrics."""
         st.title("☀️ SolarBatterYield - PV-Analyse mit Speichervergleich")
-        place_name = reverse_geocode(self.config.lat, self.config.lon)
+        place_name = _get_short_place_name()
         location_str = f"{place_name} ({self.config.lat}°N / {self.config.lon}°E)" if place_name else f"{self.config.lat}°N / {self.config.lon}°E"
         st.caption(f"PVGIS-Stundenwerte {self.config.pv_system.data_year}  ·  Standort {location_str}")
 

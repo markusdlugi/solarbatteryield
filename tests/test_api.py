@@ -314,7 +314,7 @@ class TestGeocode:
     """Tests for geocoding functionality."""
 
     def test_should_return_coordinates_for_valid_query(self):
-        """Should return display name and coordinates for valid location."""
+        """Should return display name, short name, and coordinates for valid location."""
         # given
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
@@ -322,16 +322,22 @@ class TestGeocode:
             "display_name": "Munich, Bavaria, Germany",
             "lat": "48.1351",
             "lon": "11.5820",
+            "address": {"city": "Munich", "state": "Bavaria", "country": "Germany"},
         }]
 
-        with patch.object(_api_requests, "get", return_value=mock_response):
+        with (
+            patch.object(_api_requests, "get", return_value=mock_response),
+            patch.object(api_module, "NOMINATIM_ENABLED", True),
+            patch.object(api_module, "NOMINATIM_EMAIL", "test@example.com"),
+        ):
             # when
             result = geocode("Munich")
 
         # then
         assert result is not None
-        display_name, lat, lon = result
+        display_name, short_name, lat, lon = result
         assert "Munich" in display_name
+        assert short_name == "Munich, Bavaria"
         assert lat == pytest.approx(48.1351)
         assert lon == pytest.approx(11.5820)
 
@@ -342,7 +348,11 @@ class TestGeocode:
         mock_response.raise_for_status = Mock()
         mock_response.json.return_value = []
 
-        with patch.object(_api_requests, "get", return_value=mock_response):
+        with (
+            patch.object(_api_requests, "get", return_value=mock_response),
+            patch.object(api_module, "NOMINATIM_ENABLED", True),
+            patch.object(api_module, "NOMINATIM_EMAIL", "test@example.com"),
+        ):
             # when
             result = geocode("NonexistentPlace12345")
 
@@ -361,6 +371,25 @@ class TestGeocode:
         # then
         assert result is None
 
+    def test_should_raise_error_when_disabled(self):
+        """Should raise GeocodingError when geocoding is disabled."""
+        # given
+        with patch.object(api_module, "NOMINATIM_ENABLED", False):
+            # when/then
+            with pytest.raises(GeocodingError, match="deaktiviert"):
+                geocode("Munich")
+
+    def test_should_raise_error_when_email_not_set(self):
+        """Should raise GeocodingError when email is not configured."""
+        # given
+        with (
+            patch.object(api_module, "NOMINATIM_ENABLED", True),
+            patch.object(api_module, "NOMINATIM_EMAIL", ""),
+        ):
+            # when/then
+            with pytest.raises(GeocodingError, match="NOMINATIM_EMAIL"):
+                geocode("Munich")
+
 
 class TestReverseGeocode:
     """Tests for reverse geocoding functionality."""
@@ -371,10 +400,15 @@ class TestReverseGeocode:
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
         mock_response.json.return_value = {
+            "display_name": "Munich, Bavaria, Germany",
             "address": {"city": "Munich", "state": "Bavaria"}
         }
 
-        with patch.object(_api_requests, "get", return_value=mock_response):
+        with (
+            patch.object(_api_requests, "get", return_value=mock_response),
+            patch.object(api_module, "NOMINATIM_ENABLED", True),
+            patch.object(api_module, "NOMINATIM_EMAIL", "test@example.com"),
+        ):
             # when
             result = reverse_geocode(48.1351, 11.5820)
 
@@ -387,10 +421,15 @@ class TestReverseGeocode:
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
         mock_response.json.return_value = {
+            "display_name": "Kleinstadt, Hessen, Germany",
             "address": {"town": "Kleinstadt", "state": "Hessen"}
         }
 
-        with patch.object(_api_requests, "get", return_value=mock_response):
+        with (
+            patch.object(_api_requests, "get", return_value=mock_response),
+            patch.object(api_module, "NOMINATIM_ENABLED", True),
+            patch.object(api_module, "NOMINATIM_EMAIL", "test@example.com"),
+        ):
             # when
             result = reverse_geocode(50.0, 8.0)
 
@@ -403,10 +442,15 @@ class TestReverseGeocode:
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
         mock_response.json.return_value = {
+            "display_name": "Dorfhausen, Bayern, Germany",
             "address": {"village": "Dorfhausen", "state": "Bayern"}
         }
 
-        with patch.object(_api_requests, "get", return_value=mock_response):
+        with (
+            patch.object(_api_requests, "get", return_value=mock_response),
+            patch.object(api_module, "NOMINATIM_ENABLED", True),
+            patch.object(api_module, "NOMINATIM_EMAIL", "test@example.com"),
+        ):
             # when
             result = reverse_geocode(47.5, 10.5)
 
@@ -416,7 +460,34 @@ class TestReverseGeocode:
     def test_should_return_none_on_error(self):
         """Should return None silently on any error."""
         # given
-        with patch.object(_api_requests, "get", side_effect=requests.exceptions.Timeout()):
+        with (
+            patch.object(_api_requests, "get", side_effect=requests.exceptions.Timeout()),
+            patch.object(api_module, "NOMINATIM_ENABLED", True),
+            patch.object(api_module, "NOMINATIM_EMAIL", "test@example.com"),
+        ):
+            # when
+            result = reverse_geocode(48.0, 11.0)
+
+        # then
+        assert result is None
+
+    def test_should_return_none_when_disabled(self):
+        """Should return None silently when geocoding is disabled."""
+        # given
+        with patch.object(api_module, "NOMINATIM_ENABLED", False):
+            # when
+            result = reverse_geocode(48.0, 11.0)
+
+        # then
+        assert result is None
+
+    def test_should_return_none_when_email_not_set(self):
+        """Should return None silently when email is not configured."""
+        # given
+        with (
+            patch.object(api_module, "NOMINATIM_ENABLED", True),
+            patch.object(api_module, "NOMINATIM_EMAIL", ""),
+        ):
             # when
             result = reverse_geocode(48.0, 11.0)
 
