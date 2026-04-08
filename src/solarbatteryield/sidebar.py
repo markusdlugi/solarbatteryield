@@ -796,6 +796,13 @@ def _render_prices_section() -> None:
             help="Angenommene Rendite eines beispielhaften ETF als alternatives Investment.",
             min_value=LIMITS.etf_ret_min, max_value=LIMITS.etf_ret_max,
             **widget_value("cfg_etf_ret"))
+        st.toggle(
+            "💸 Ersparnisse reinvestieren", key="cfg_reinvest_savings",
+            help="Die monatlichen Ersparnisse aus der PV-Nutzung werden reinvestiert "
+                 "und mit der ETF-Rendite verzinst. Die angezeigten Ergebnisse sind "
+                 "nur zu erreichen, wenn jegliche Ersparnisse konsequent per Sparplan "
+                 "investiert werden.",
+            **widget_value("cfg_reinvest_savings"))
         st.slider("Analyse-Horizont (Jahre)", LIMITS.years_min, LIMITS.years_max, 
                   key="cfg_years",
                   **widget_value("cfg_years"))

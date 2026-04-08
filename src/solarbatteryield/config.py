@@ -213,7 +213,8 @@ PERSISTED_KEYS: list[str] = [
     "cfg_base_cost", "cfg_dc_coupled", "cfg_inverter_efficiency_preset",
     "cfg_batt_loss", "cfg_batt_inverter_preset",
     "cfg_min_soc_s", "cfg_max_soc_s", "cfg_min_soc_w", "cfg_max_soc_w",
-    "cfg_e_price", "cfg_e_inc", "cfg_feed_in_tariff", "cfg_etf_ret", "cfg_years",
+    "cfg_e_price", "cfg_e_inc", "cfg_feed_in_tariff", "cfg_etf_ret",
+    "cfg_reinvest_savings", "cfg_years",
 ]
 
 

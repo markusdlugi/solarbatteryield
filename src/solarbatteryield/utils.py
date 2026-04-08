@@ -89,7 +89,8 @@ def color_vollzyklen(val) -> str:
 @st.cache_data
 def build_yearly_data(saved_kwh: float, feed_in_kwh: float, feed_in_tariff: float,
                       cost: float, e_price: float, e_inc: float, 
-                      etf_ret: float, years: int) -> pd.DataFrame:
+                      etf_ret: float, years: int,
+                      reinvest_savings: bool = False) -> pd.DataFrame:
     """
     Build yearly comparison data for PV vs ETF investment.
     
@@ -102,26 +103,65 @@ def build_yearly_data(saved_kwh: float, feed_in_kwh: float, feed_in_tariff: floa
         e_inc: Annual electricity price increase (decimal, e.g., 0.03 for 3%)
         etf_ret: Annual ETF return (decimal, e.g., 0.07 for 7%)
         years: Number of years to simulate
+        reinvest_savings: Whether to reinvest PV savings with ETF return rate
         
     Returns:
         DataFrame with yearly comparison data
     """
     rows = []
     pv_cum = 0.0
+    
+    # For reinvested savings calculation
+    # Monthly investment = CONSTANT based on first year savings (realistic: fixed standing order)
+    # This is more realistic than adjusting the savings plan each year with electricity prices
+    first_year_savings = saved_kwh * e_price + feed_in_kwh * feed_in_tariff
+    monthly_invest = first_year_savings / 12
+    
+    reinvest_portfolio = 0.0
+    monthly_etf_ret = (1 + etf_ret) ** (1 / 12) - 1  # Monthly return rate
+    
+    # Track total contributions for reinvest return calculation
+    total_contributions = 0.0
+    
     for y in range(1, years + 1):
         price = e_price * (1 + e_inc) ** (y - 1)
-        pv_cum += saved_kwh * price + feed_in_kwh * feed_in_tariff
-        pv_net = pv_cum - cost
+        yearly_savings = saved_kwh * price + feed_in_kwh * feed_in_tariff
+        pv_cum += yearly_savings
+        
+        # Calculate reinvest returns if enabled
+        reinvest_returns = 0.0
+        if reinvest_savings:
+            # Fixed monthly investment (same every month, every year)
+            for _m in range(12):
+                # Add monthly contribution at start of month
+                reinvest_portfolio += monthly_invest
+                total_contributions += monthly_invest
+                # Apply monthly return at end of month
+                reinvest_portfolio *= (1 + monthly_etf_ret)
+            
+            # Returns = portfolio value - total contributions
+            reinvest_returns = reinvest_portfolio - total_contributions
+        
+        # PV netto includes reinvest returns when enabled
+        pv_net = pv_cum + reinvest_returns - cost
+        
         etf_val = cost * (1 + etf_ret) ** y
         etf_net = etf_val - cost
-        rows.append({
+        
+        row = {
             "Jahr": y,
             "PV kumuliert (EUR)": pv_cum,
-            "PV netto (EUR)": pv_net,
-            "ETF Wert (EUR)": etf_val,
-            "ETF netto (EUR)": etf_net,
-            "PV - ETF (EUR)": pv_net - etf_net,
-        })
+        }
+        
+        if reinvest_savings:
+            row["Reinvest-Ertrag (EUR)"] = reinvest_returns
+        
+        row["PV netto (EUR)"] = pv_net
+        row["ETF Wert (EUR)"] = etf_val
+        row["ETF netto (EUR)"] = etf_net
+        row["PV - ETF (EUR)"] = pv_net - etf_net
+        
+        rows.append(row)
     return pd.DataFrame(rows)
 
 

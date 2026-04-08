@@ -57,7 +57,11 @@ class Report:
     @property
     def analysis_years(self) -> int:
         return self.config.economics.analysis_years
-    
+
+    @property
+    def reinvest_savings(self) -> bool:
+        return self.config.economics.reinvest_savings
+
     @property
     def total_consumption(self) -> float:
         return self.results.total_consumption
@@ -552,7 +556,7 @@ class Report:
             df = build_yearly_data(
                 r.saved_kwh, r.feed_in, self.feed_in_tariff,
                 r.investment_cost, self.e_price, self.e_inc,
-                self.etf_ret, self.analysis_years
+                self.etf_ret, self.analysis_years, self.reinvest_savings
             ).copy()
             df["Szenario"] = r.name
             chart_frames.append(df)
@@ -630,6 +634,16 @@ Die Stromkosten müssen also nicht noch einmal vom ETF-Gewinn abgezogen werden �
 
 **Vereinfachungen:** Abschreibung/Wertverlust der PV-Anlage sowie Wartungskosten sind nicht berücksichtigt. 
 Ebenso wenig Kapitalertragsteuer auf ETF-Gewinne oder steuerliche Vorteile der PV-Anlage.
+
+**Option „💸 Ersparnisse reinvestieren":** Diese Option simuliert, was passiert, wenn die monatliche Ersparnis im
+PV-Szenario konsequent in einen ETF-Sparplan investiert wird. Die angezeigte „Monatl. Sparrate" basiert auf der
+Ersparnis im ersten Jahr und bleibt konstant (wie bei einem typischen Dauerauftrag). Die Erträge aus diesem Sparplan
+werden zum PV-Gewinn addiert.
+
+⚠️ **Wichtig:** Dies zeigt das *theoretische Maximum*, das nur erreicht wird, wenn:
+- Die Ersparnis jeden Monat diszipliniert investiert wird (statt sie auszugeben)
+- Der Sparplan über den gesamten Zeitraum durchgehalten wird
+- Der ETF tatsächlich die angenommene Rendite erzielt
             """)
 
     def _render_scenario_details(self) -> None:
@@ -640,20 +654,41 @@ Ebenso wenig Kapitalertragsteuer auf ETF-Gewinne oder steuerliche Vorteile der P
                 df = build_yearly_data(
                     r.saved_kwh, r.feed_in, self.feed_in_tariff,
                     r.investment_cost, self.e_price, self.e_inc,
-                    self.etf_ret, self.analysis_years
+                    self.etf_ret, self.analysis_years, self.reinvest_savings
                 )
 
                 be_pv = find_breakeven(df, "PV netto (EUR)")
                 be_etf = find_breakeven(df, "PV - ETF (EUR)")
 
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Amortisation", f"{be_pv} Jahre" if be_pv else "nie")
-                c2.metric("PV schlägt ETF nach", f"{be_etf} Jahren" if be_etf else "nie")
-                final = df.iloc[-1]
-                c3.metric(
-                    f"Δ PV − ETF nach {self.analysis_years}a",
-                    f"{de(final['PV - ETF (EUR)'], sign=True)} €",
-                )
+                # Calculate monthly investment (annual savings / 12)
+                # First year savings as reference
+                first_year_savings = r.annual_savings(self.e_price, self.feed_in_tariff)
+                monthly_invest = first_year_savings / 12
+                
+                if self.reinvest_savings:
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric(
+                        "Monatl. Sparrate",
+                        f"{de(monthly_invest, 0)} €",
+                        help="Empfohlener monatlicher Betrag für den ETF-Sparplan zur Reinvestition "
+                             "der Ersparnisse, basierend auf der Ersparnis im ersten Jahr."
+                    )
+                    c2.metric("Amortisation", f"{be_pv} Jahre" if be_pv else "nie")
+                    c3.metric("PV schlägt ETF nach", f"{be_etf} Jahren" if be_etf else "nie")
+                    final = df.iloc[-1]
+                    c4.metric(
+                        f"Δ PV − ETF nach {self.analysis_years}a",
+                        f"{de(final['PV - ETF (EUR)'], sign=True)} €",
+                    )
+                else:
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Amortisation", f"{be_pv} Jahre" if be_pv else "nie")
+                    c2.metric("PV schlägt ETF nach", f"{be_etf} Jahren" if be_etf else "nie")
+                    final = df.iloc[-1]
+                    c3.metric(
+                        f"Δ PV − ETF nach {self.analysis_years}a",
+                        f"{de(final['PV - ETF (EUR)'], sign=True)} €",
+                    )
 
                 euro_cols = [c for c in df.columns if "(EUR)" in c]
                 fmt = {c: de_styler(0, sign=True) for c in euro_cols}
@@ -663,6 +698,7 @@ Ebenso wenig Kapitalertragsteuer auf ETF-Gewinne oder steuerliche Vorteile der P
                     .format(fmt)
                     .map(color_pos_neg, subset=["PV netto (EUR)", "PV - ETF (EUR)"])
                 )
+                
                 st.dataframe(styled_detail, width="stretch", hide_index=True)
 
     def _render_summary(self) -> None:
@@ -672,31 +708,48 @@ Ebenso wenig Kapitalertragsteuer auf ETF-Gewinne oder steuerliche Vorteile der P
 
         summary_rows = []
         for r in self.scenarios:
-            pv_savings = sum(
-                r.saved_kwh * self.e_price * (1 + self.e_inc) ** y + r.feed_in * self.feed_in_tariff
-                for y in range(self.analysis_years)
+            # Use build_yearly_data to get consistent calculations including reinvest
+            df = build_yearly_data(
+                r.saved_kwh, r.feed_in, self.feed_in_tariff,
+                r.investment_cost, self.e_price, self.e_inc,
+                self.etf_ret, self.analysis_years, self.reinvest_savings
             )
-            pv_profit = pv_savings - r.investment_cost
-            etf_profit = r.investment_cost * (1 + self.etf_ret) ** self.analysis_years - r.investment_cost
-            summary_rows.append({
+            final = df.iloc[-1]
+            pv_profit = final["PV netto (EUR)"]
+            etf_profit = final["ETF netto (EUR)"]
+            
+            row = {
                 "Szenario": r.name,
                 "Investition (€)": r.investment_cost,
                 "PV Gewinn (€)": round(pv_profit, 2),
-                "ETF Gewinn (€)": round(etf_profit, 2),
-                "Besser": "PV" if pv_profit > etf_profit else "ETF",
-                "Differenz (€)": round(pv_profit - etf_profit, 2),
-            })
+            }
+            
+            # Add reinvest column right after PV Gewinn
+            if self.reinvest_savings:
+                row["davon Reinvest (€)"] = round(final["Reinvest-Ertrag (EUR)"], 2)
+            
+            row["ETF Gewinn (€)"] = round(etf_profit, 2)
+            row["Besser"] = "PV" if pv_profit > etf_profit else "ETF"
+            row["Differenz (€)"] = round(pv_profit - etf_profit, 2)
+            
+            summary_rows.append(row)
 
         summary_df = pd.DataFrame(summary_rows)
+        fmt = {
+            "Investition (€)": de_styler(0),
+            "PV Gewinn (€)": de_styler(0, sign=True),
+            "ETF Gewinn (€)": de_styler(0, sign=True),
+            "Differenz (€)": de_styler(0, sign=True),
+        }
+        color_cols = ["PV Gewinn (€)", "ETF Gewinn (€)", "Differenz (€)"]
+        
+        if self.reinvest_savings:
+            fmt["davon Reinvest (€)"] = de_styler(0, sign=True)
+        
         styled_summary = (
             summary_df.style
-            .format({
-                "Investition (€)": de_styler(0),
-                "PV Gewinn (€)": de_styler(0, sign=True),
-                "ETF Gewinn (€)": de_styler(0, sign=True),
-                "Differenz (€)": de_styler(0, sign=True),
-            })
-            .map(color_pos_neg, subset=["PV Gewinn (€)", "ETF Gewinn (€)", "Differenz (€)"])
+            .format(fmt)
+            .map(color_pos_neg, subset=color_cols)
         )
         st.dataframe(styled_summary, width="stretch", hide_index=True)
 

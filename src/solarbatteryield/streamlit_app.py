@@ -156,6 +156,7 @@ def get_config() -> SimulationConfig:
             e_inc=sv("cfg_e_inc") / 100,
             feed_in_tariff=sv("cfg_feed_in_tariff"),
             etf_ret=sv("cfg_etf_ret") / 100,
+            reinvest_savings=sv("cfg_reinvest_savings"),
             analysis_years=sv("cfg_years"),
         ),
     )

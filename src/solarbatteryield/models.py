@@ -199,8 +199,9 @@ class EconomicsConfig:
     e_inc: float = 0.03  # Annual price increase (decimal)
     feed_in_tariff: float = 0.0  # Feed-in tariff in ct/kWh
     etf_ret: float = 0.07  # Annual ETF return (decimal)
+    reinvest_savings: bool = False  # Reinvest PV savings with ETF return rate
     analysis_years: int = 15  # Analysis horizon in years
-    
+
     def __post_init__(self) -> None:
         """Validate economic parameters."""
         if self.e_price <= 0:
