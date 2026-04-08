@@ -13,13 +13,39 @@ import requests
 import streamlit as st
 
 
+def _get_secret(key: str, default: str = "") -> str:
+    """
+    Get a configuration value from Streamlit secrets or environment variables.
+    
+    Streamlit Community Cloud uses st.secrets, while local development
+    typically uses environment variables. This function checks both.
+    
+    Args:
+        key: The configuration key to look up
+        default: Default value if not found
+        
+    Returns:
+        The configuration value or default
+    """
+    # Try st.secrets first (Streamlit Community Cloud)
+    try:
+        if key in st.secrets:
+            return str(st.secrets[key])
+    except Exception:
+        # st.secrets may not be available in all contexts (e.g., tests)
+        pass
+    
+    # Fall back to environment variables (local development)
+    return os.environ.get(key, default)
+
+
 # Nominatim contact email (recommended by usage policy to avoid blocks)
 # https://operations.osmfoundation.org/policies/nominatim/
-NOMINATIM_EMAIL = os.environ.get("NOMINATIM_EMAIL", "")
+NOMINATIM_EMAIL = _get_secret("NOMINATIM_EMAIL", "")
 
 # Geocoding is disabled by default for local development to avoid rate limiting.
 # Set NOMINATIM_ENABLED=true to enable (requires NOMINATIM_EMAIL to be set).
-NOMINATIM_ENABLED = os.environ.get("NOMINATIM_ENABLED", "").lower() in ("true", "1", "yes")
+NOMINATIM_ENABLED = _get_secret("NOMINATIM_ENABLED", "").lower() in ("true", "1", "yes")
 
 
 # ─── Custom Exceptions ─────────────────────────────────────────

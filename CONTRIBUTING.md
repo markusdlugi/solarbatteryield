@@ -32,7 +32,7 @@ uv run streamlit run src/solarbatteryield/streamlit_app.py
 
 ### Konfiguration (optional)
 
-| Umgebungsvariable   | Beschreibung                                                                                                 | Default |
+| Variable            | Beschreibung                                                                                                 | Default |
 |---------------------|--------------------------------------------------------------------------------------------------------------|---------|
 | `NOMINATIM_ENABLED` | Aktiviert Geocoding (Ortssuche). Standardmäßig deaktiviert, um Rate-Limits bei der Entwicklung zu vermeiden. | `false` |
 | `NOMINATIM_EMAIL`   | E-Mail-Adresse für Nominatim-Anfragen. **Pflicht**, wenn Geocoding aktiviert ist.                            | –       |
@@ -41,12 +41,28 @@ uv run streamlit run src/solarbatteryield/streamlit_app.py
 > aber `NOMINATIM_EMAIL` fehlt, wirft die App einen Fehler. Dies verhindert, dass Requests ohne E-Mail-Adresse
 > gesendet werden, was zu Blockierungen durch Nominatim führen kann.
 
-Beispiel:
+#### Lokale Entwicklung (Umgebungsvariablen)
 
 ```bash
 export NOMINATIM_ENABLED=true
 export NOMINATIM_EMAIL="your-email@example.com"
 uv run streamlit run src/solarbatteryield/streamlit_app.py
+```
+
+Oder in `.streamlit/secrets.toml`:
+
+```toml
+NOMINATIM_ENABLED = "true"
+NOMINATIM_EMAIL = "your-email@example.com"
+```
+
+#### Streamlit Community Cloud
+
+In den App-Einstellungen unter **Settings > Secrets**:
+
+```toml
+NOMINATIM_ENABLED = "true"
+NOMINATIM_EMAIL = "your-email@example.com"
 ```
 
 ### Tests ausführen
