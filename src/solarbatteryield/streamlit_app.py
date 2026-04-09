@@ -20,8 +20,9 @@ from solarbatteryield.models import (
 )
 from solarbatteryield.simulation import simulate
 from solarbatteryield.state import init_session_state, sv
+# Import from packages (new modular structure)
 from solarbatteryield.sidebar import render_sidebar
-from solarbatteryield.report import render_report, render_missing_config_message
+from solarbatteryield.report import render_report, render_landing_page
 
 
 def main():
@@ -38,7 +39,7 @@ def main():
     # Validate required configuration
     is_valid, missing = config.is_valid()
     if not is_valid:
-        render_missing_config_message(missing)
+        render_landing_page(missing)
         st.stop()
     
     # Fetch PV data and run simulation

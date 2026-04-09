@@ -30,15 +30,24 @@ class MockSessionState(dict):
 @pytest.fixture
 def mock_streamlit():
     """Fixture that provides a properly mocked Streamlit module."""
-    # Remove cached state module if present
-    if "state" in sys.modules:
-        del sys.modules["state"]
+    # Remove cached state module so it gets re-imported with the mock.
+    # If solarbatteryield.state was already imported (e.g. by other tests
+    # importing report/sidebar packages), it holds a stale reference to
+    # the real streamlit.  Removing it forces a fresh import.
+    _modules_to_reload = [
+        k for k in sys.modules
+        if k == "solarbatteryield.state" or k == "state"
+    ]
+    saved = {k: sys.modules.pop(k) for k in _modules_to_reload}
     
     mock_st = MagicMock()
     mock_st.session_state = MockSessionState()
     
     with patch.dict(sys.modules, {"streamlit": mock_st}):
         yield mock_st
+    
+    # Restore original modules so other tests are not affected
+    sys.modules.update(saved)
 
 
 class TestConfigEncoding:
