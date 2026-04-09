@@ -14,21 +14,19 @@ from unittest.mock import patch
 
 import pytest
 
-from solarbatteryield.load_regression import (
+# Import shared helper functions from conftest
+from conftest import (
+    create_simulation_params,
+    create_synthetic_pv_data,
+)
+from solarbatteryield.models import SimulationInput
+from solarbatteryield.simulation import simulate
+from solarbatteryield.simulation.load_regression import (
     get_direct_pv_fraction,
     _create_regression,
     _REGRESSION_DB,
     _DB_MAX_CONSUMPTION_W,
     DB_RESOLUTION_W,
-)
-from solarbatteryield.models import SimulationInput
-from solarbatteryield.simulation import simulate
-from solarbatteryield.inverter_efficiency import INVERTER_EFFICIENCY_CURVES
-
-# Import shared helper functions from conftest
-from conftest import (
-    create_simulation_params,
-    create_synthetic_pv_data,
 )
 
 
@@ -66,7 +64,6 @@ def _create_load_regression_params() -> SimulationInput:
         ],
         periodic_days=3,
     )
-
 
 
 def _naive_fraction(load_w: float, pv_w: float) -> float:
@@ -124,10 +121,10 @@ class TestDirectPvFractionEdgeCases:
     """Tests for edge case handling in direct PV fraction calculation."""
 
     @pytest.mark.parametrize("load_w,pv_w", [
-        (0, 500),      # zero load
-        (500, 0),      # zero PV
-        (-100, 500),   # negative load
-        (500, -100),   # negative PV
+        (0, 500),  # zero load
+        (500, 0),  # zero PV
+        (-100, 500),  # negative load
+        (500, -100),  # negative PV
     ])
     def test_should_return_zero_for_invalid_inputs(self, load_w, pv_w):
         """Should return zero fraction for invalid input combinations."""
@@ -139,7 +136,6 @@ class TestDirectPvFractionEdgeCases:
 
         # then
         assert fraction == pytest.approx(0.0)
-
 
     def test_should_handle_loads_above_database_range(self):
         """Should return valid fraction for loads exceeding the database maximum."""
@@ -249,7 +245,14 @@ class TestSimulationWithRegression:
             results_regression[cap] = simulate(pv_data, cap, params)
 
         results_naive = {}
-        with patch("solarbatteryield.simulation.get_direct_pv_fraction", side_effect=_naive_fraction):
+        with (
+            patch("solarbatteryield.simulation.battery._no_battery.get_direct_pv_fraction",
+                  side_effect=_naive_fraction),
+            patch("solarbatteryield.simulation.battery._dc_coupled.get_direct_pv_fraction",
+                  side_effect=_naive_fraction),
+            patch("solarbatteryield.simulation.battery._ac_coupled.get_direct_pv_fraction",
+                  side_effect=_naive_fraction),
+        ):
             for cap in battery_capacities:
                 results_naive[cap] = simulate(pv_data, cap, params)
 

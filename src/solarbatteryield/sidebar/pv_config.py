@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from solarbatteryield.config import LIMITS
-from solarbatteryield.inverter_efficiency import (
+from solarbatteryield.simulation.inverter_efficiency import (
     DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT,
     INVERTER_EFFICIENCY_CURVES,
 )

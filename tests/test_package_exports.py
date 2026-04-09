@@ -117,6 +117,96 @@ class TestReportPackageExports:
         assert callable(render_landing_page)
 
 
+class TestSimulationPackageExports:
+    """Tests for simulation package public API."""
+
+    def test_should_export_simulate(self):
+        """Should export simulate function from simulation package root."""
+        # when
+        from solarbatteryield.simulation import simulate
+
+        # then
+        assert callable(simulate)
+
+    def test_should_import_h0_profile_submodule(self):
+        """Should allow importing h0_profile from simulation subpackage."""
+        # when
+        from solarbatteryield.simulation.h0_profile import get_h0_load, get_season
+
+        # then
+        assert callable(get_h0_load)
+        assert callable(get_season)
+
+    def test_should_import_inverter_efficiency_submodule(self):
+        """Should allow importing inverter_efficiency from simulation subpackage."""
+        # when
+        from solarbatteryield.simulation.inverter_efficiency import get_inverter_efficiency
+
+        # then
+        assert callable(get_inverter_efficiency)
+
+    def test_should_import_load_regression_submodule(self):
+        """Should allow importing load_regression from simulation subpackage."""
+        # when
+        from solarbatteryield.simulation.load_regression import get_direct_pv_fraction
+
+        # then
+        assert callable(get_direct_pv_fraction)
+
+    def test_should_import_load_submodule(self):
+        """Should allow importing load functions from simulation subpackage."""
+        # when
+        from solarbatteryield.simulation.load import calculate_hourly_load, update_flex_pool
+
+        # then
+        assert callable(calculate_hourly_load)
+        assert callable(update_flex_pool)
+
+
+class TestBatteryPackageExports:
+    """Tests for battery package public API."""
+
+    def test_should_export_battery_base_class(self):
+        """Should export Battery ABC from battery package root."""
+        # when
+        from solarbatteryield.simulation.battery import Battery
+
+        # then
+        assert Battery is not None
+
+    def test_should_export_no_battery(self):
+        """Should export NoBattery from battery package root."""
+        # when
+        from solarbatteryield.simulation.battery import NoBattery
+
+        # then
+        assert NoBattery is not None
+
+    def test_should_export_dc_coupled_battery(self):
+        """Should export DcCoupledBattery from battery package root."""
+        # when
+        from solarbatteryield.simulation.battery import DcCoupledBattery
+
+        # then
+        assert DcCoupledBattery is not None
+
+    def test_should_export_ac_coupled_battery(self):
+        """Should export AcCoupledBattery from battery package root."""
+        # when
+        from solarbatteryield.simulation.battery import AcCoupledBattery
+
+        # then
+        assert AcCoupledBattery is not None
+
+    def test_should_export_create_battery_factory(self):
+        """Should export create_battery factory from battery package root."""
+        # when
+        from solarbatteryield.simulation.battery import create_battery
+
+        # then
+        assert callable(create_battery)
+
+
 class TestSidebarPackageExports:
     """Tests for sidebar package public API."""
 

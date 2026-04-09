@@ -5,17 +5,15 @@ The H0 profile module provides BDEW (Bundesverband der Energie- und Wasserwirtsc
 standard load profiles for household electricity consumption, with differentiation
 by day type (weekday, Saturday, Sunday/holiday) and season.
 """
-import pytest
 from datetime import date
 
-from solarbatteryield.h0_profile import (
+import pytest
+
+from solarbatteryield.simulation.h0_profile import (
     DayType,
     Season,
     DayProfile,
-    SeasonProfile,
     H0_WINTER,
-    H0_SUMMER,
-    H0_TRANSITION,
     H0_PROFILES,
     H0_BASE_ANNUAL_KWH,
     H0_AVERAGE_PROFILE,
@@ -450,4 +448,3 @@ class TestH0AverageProfile:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

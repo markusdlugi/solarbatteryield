@@ -108,19 +108,19 @@ class TestModuleImports:
     def test_should_import_h0_profile_module(self):
         """Should import the H0 profile module without errors."""
         # when/then
-        from solarbatteryield.h0_profile import get_h0_load
+        from solarbatteryield.simulation.h0_profile import get_h0_load
         assert get_h0_load is not None
 
     def test_should_import_inverter_efficiency_module(self):
         """Should import the inverter efficiency module without errors."""
         # when/then
-        from solarbatteryield.inverter_efficiency import get_inverter_efficiency
+        from solarbatteryield.simulation.inverter_efficiency import get_inverter_efficiency
         assert get_inverter_efficiency is not None
 
     def test_should_import_load_regression_module(self):
         """Should import the load regression module without errors."""
         # when/then
-        from solarbatteryield.load_regression import get_direct_pv_fraction
+        from solarbatteryield.simulation.load_regression import get_direct_pv_fraction
         assert get_direct_pv_fraction is not None
 
 

@@ -8,7 +8,7 @@ import pytest
 import numpy as np
 
 from solarbatteryield.models import SimulationInput, ConsumptionConfig, StorageConfig
-from solarbatteryield.inverter_efficiency import (
+from solarbatteryield.simulation.inverter_efficiency import (
     INVERTER_EFFICIENCY_CURVES,
 )
 

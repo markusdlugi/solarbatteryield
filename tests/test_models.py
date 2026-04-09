@@ -20,7 +20,7 @@ from solarbatteryield.models import (
     HourlyResult,
     PVModule,
 )
-from solarbatteryield.inverter_efficiency import (
+from solarbatteryield.simulation.inverter_efficiency import (
     INVERTER_EFFICIENCY_CURVES,
     DEFAULT_INVERTER_EFFICIENCY_CURVE,
 )

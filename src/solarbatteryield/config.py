@@ -5,7 +5,7 @@ All default values are centralized here as a single source of truth.
 from dataclasses import dataclass, field
 from typing import Any
 
-from solarbatteryield.h0_profile import H0_TRANSITION, get_season, Season
+from solarbatteryield.simulation.h0_profile import H0_TRANSITION, get_season, Season
 from datetime import date
 
 

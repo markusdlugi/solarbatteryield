@@ -12,7 +12,7 @@ from solarbatteryield.models import (
     SimulationConfig, ConsumptionConfig, LocationConfig,
     PVSystemConfig, StorageConfig, EconomicsConfig, SimulationInput,
 )
-from solarbatteryield.inverter_efficiency import DEFAULT_INVERTER_EFFICIENCY_CURVE
+from solarbatteryield.simulation.inverter_efficiency import DEFAULT_INVERTER_EFFICIENCY_CURVE
 from solarbatteryield.simulation import simulate
 
 # Import shared helper functions from conftest

@@ -11,8 +11,8 @@ __version__ = "0.1.0"
 # This prevents race conditions with @dataclass decorators on Streamlit Cloud.
 # Order matters: import dependencies before dependents.
 # Use relative imports to avoid KeyError during package initialization.
-from . import inverter_efficiency  # noqa: F401  - needed by models, simulation
-from . import h0_profile  # noqa: F401  - needed by config, simulation
-from . import load_regression  # noqa: F401  - JSON loaded at module level
+from .simulation import inverter_efficiency  # noqa: F401  - needed by models, simulation
+from .simulation import h0_profile  # noqa: F401  - needed by config, simulation
+from .simulation import load_regression  # noqa: F401  - JSON loaded at module level
 from . import config  # noqa: F401  - needed by state, sidebar, report
 from . import models  # noqa: F401  - needed by simulation, report

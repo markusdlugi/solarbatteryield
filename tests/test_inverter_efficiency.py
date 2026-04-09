@@ -7,7 +7,7 @@ to model realistic inverter behavior at different power levels.
 """
 import pytest
 
-from solarbatteryield.inverter_efficiency import (
+from solarbatteryield.simulation.inverter_efficiency import (
     get_inverter_efficiency,
     INVERTER_EFFICIENCY_CURVES,
     INVERTER_EFFICIENCY_P10,

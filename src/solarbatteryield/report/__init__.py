@@ -11,7 +11,7 @@ from solarbatteryield.report.landing import render_landing_page
 
 __all__ = [
     "Report",
-    "render_report",
     "render_landing_page",
+    "render_report",
 ]
 
