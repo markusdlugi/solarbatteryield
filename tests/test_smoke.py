@@ -96,7 +96,7 @@ class TestModuleImports:
     def test_should_import_models_module(self):
         """Should import the models module without errors."""
         # when/then
-        from solarbatteryield.models import SimulationConfig, SimulationParams, SimulationResult
+        from solarbatteryield.models import SimulationConfig, SimulationInput, SimulationResult
         assert SimulationConfig is not None
 
     def test_should_import_api_module(self):

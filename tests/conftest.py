@@ -7,10 +7,9 @@ test modules to reduce duplication and ensure consistency.
 import pytest
 import numpy as np
 
-from solarbatteryield.models import SimulationParams
+from solarbatteryield.models import SimulationInput, ConsumptionConfig, StorageConfig
 from solarbatteryield.inverter_efficiency import (
     INVERTER_EFFICIENCY_CURVES,
-    DEFAULT_INVERTER_EFFICIENCY_CURVE,
 )
 
 
@@ -18,21 +17,20 @@ from solarbatteryield.inverter_efficiency import (
 
 
 @pytest.fixture
-def base_simulation_params() -> SimulationParams:
+def base_simulation_params() -> SimulationInput:
     """
-    Create base SimulationParams with sensible defaults.
+    Create base SimulationInput with sensible defaults.
     
     This is the foundation for most simulation tests. Use this fixture and
-    override specific fields as needed using dataclasses.replace() or by
-    creating a new params object with modified values.
+    override specific fields as needed.
     """
     return create_simulation_params()
 
 
 @pytest.fixture
-def expert_mode_params() -> SimulationParams:
+def expert_mode_params() -> SimulationInput:
     """
-    Create SimulationParams configured for expert mode with a constant yearly profile.
+    Create SimulationInput configured for expert mode with a constant yearly profile.
     
     Expert mode uses a complete yearly hourly load profile instead of
     standard profiles or custom daily patterns.
@@ -105,50 +103,79 @@ def realistic_load_profile() -> list[float]:
 # with custom parameters when fixtures don't provide enough flexibility.
 
 
-def create_simulation_params(**overrides) -> SimulationParams:
+def create_simulation_params(**overrides) -> SimulationInput:
     """
-    Create SimulationParams with sensible defaults.
+    Create SimulationInput with sensible defaults.
     
-    This is the primary factory function for creating test simulation parameters.
+    This is the primary factory function for creating test simulation inputs.
     All default values are chosen to represent a typical residential PV system.
+    
+    Keyword arguments use the canonical field names from the sub-configs:
+    
+    ConsumptionConfig fields:
+        profile_mode, annual_kwh, active_base, profile_saturday, profile_sunday,
+        yearly_profile, seasonal_enabled, season_winter_pct, season_summer_pct,
+        flex_enabled, flex_delta, flex_min_yield, flex_pool, flex_refresh,
+        periodic_enabled, periodic_delta, periodic_days
+    
+    StorageConfig fields:
+        dc_coupled, batt_loss, min_soc_summer, max_soc_summer,
+        min_soc_winter, max_soc_winter
+    
+    SimulationInput fields:
+        data_year, inverter_limit_kw, inverter_efficiency_curve,
+        batt_inverter_efficiency_curve
     
     Args:
         **overrides: Keyword arguments to override default parameter values.
         
     Returns:
-        SimulationParams with defaults merged with overrides.
+        SimulationInput with defaults merged with overrides.
     """
-    defaults = dict(
-        batt_loss_pct=10,
-        dc_coupled=True,
-        min_soc_summer_pct=10,
-        min_soc_winter_pct=20,
-        max_soc_summer_pct=100,
-        max_soc_winter_pct=100,
-        data_year=2015,
-        inverter_limit_kw=0.8,
-        inverter_efficiency_curve=INVERTER_EFFICIENCY_CURVES["median"],
-        batt_inverter_efficiency_curve=INVERTER_EFFICIENCY_CURVES["median"],
-        profile_mode="Erweitert",
-        annual_kwh=3000,
-        profile_base=[200] * 24,  # Constant 200W load
-        profile_saturday=None,
-        profile_sunday=None,
-        yearly_profile=None,
-        seasonal_enabled=False,
-        season_winter_pct=100,
-        season_summer_pct=100,
-        flex_load_enabled=False,
-        flex_min_yield=5.0,
-        flex_pool_size=3,
-        flex_delta=[0] * 24,
-        flex_refresh_rate=0.5,
-        periodic_load_enabled=False,
-        periodic_delta=[0] * 24,
-        periodic_interval_days=3,
+    def get(key, default):
+        return overrides.get(key, default)
+    
+    consumption = ConsumptionConfig(
+        profile_mode=get('profile_mode', 'Erweitert'),
+        annual_kwh=get('annual_kwh', 3000),
+        active_base=get('active_base', [200] * 24),
+        profile_saturday=get('profile_saturday', None),
+        profile_sunday=get('profile_sunday', None),
+        yearly_profile=get('yearly_profile', None),
+        seasonal_enabled=get('seasonal_enabled', False),
+        season_winter_pct=get('season_winter_pct', 100),
+        season_summer_pct=get('season_summer_pct', 100),
+        flex_enabled=get('flex_enabled', False),
+        flex_delta=get('flex_delta', [0] * 24),
+        flex_min_yield=get('flex_min_yield', 5.0),
+        flex_pool=get('flex_pool', 3),
+        flex_refresh=get('flex_refresh', 0.5),
+        periodic_enabled=get('periodic_enabled', False),
+        periodic_delta=get('periodic_delta', [0] * 24),
+        periodic_days=get('periodic_days', 3),
     )
-    defaults.update(overrides)
-    return SimulationParams(**defaults)
+    
+    storage = StorageConfig(
+        dc_coupled=get('dc_coupled', True),
+        batt_loss=get('batt_loss', 10),
+        min_soc_summer=get('min_soc_summer', 10),
+        max_soc_summer=get('max_soc_summer', 100),
+        min_soc_winter=get('min_soc_winter', 20),
+        max_soc_winter=get('max_soc_winter', 100),
+    )
+    
+    return SimulationInput(
+        consumption=consumption,
+        storage=storage,
+        data_year=get('data_year', 2015),
+        inverter_limit_kw=get('inverter_limit_kw', 0.8),
+        inverter_efficiency_curve=get(
+            'inverter_efficiency_curve', INVERTER_EFFICIENCY_CURVES["median"]
+        ),
+        batt_inverter_efficiency_curve=get(
+            'batt_inverter_efficiency_curve', INVERTER_EFFICIENCY_CURVES["median"]
+        ),
+    )
 
 
 def create_constant_pv(power_kw: float, hours: int = 8760) -> np.ndarray:

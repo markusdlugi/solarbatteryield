@@ -8,11 +8,8 @@ types (AC/DC), inverter efficiency, load profiles, and seasonal variations.
 import pytest
 import numpy as np
 
-from solarbatteryield.models import SimulationParams
 from solarbatteryield.simulation import simulate
-from solarbatteryield.inverter_efficiency import INVERTER_EFFICIENCY_CURVES, DEFAULT_INVERTER_EFFICIENCY_CURVE
 
-# Import shared helper functions from conftest
 from conftest import (
     create_simulation_params,
     create_constant_pv,
@@ -45,7 +42,7 @@ class TestSimulationEnergyBalance:
         """Should track total consumption matching the load profile."""
         # given
         constant_load_watts = 300
-        params = create_simulation_params(profile_base=[constant_load_watts] * 24)
+        params = create_simulation_params(active_base=[constant_load_watts] * 24)
         pv_data = np.zeros(8760)
 
         # when
@@ -76,7 +73,7 @@ class TestSimulationWithoutBattery:
         """Should feed excess PV to grid when no battery is available."""
         # given
         params = create_simulation_params(
-            profile_base=[100] * 24,  # Low load: 100W
+            active_base=[100] * 24,  # Low load: 100W
             inverter_limit_kw=None,   # No inverter limit
         )
         pv_data = create_constant_pv(power_kw=1.0)  # 1kW constant
@@ -92,7 +89,7 @@ class TestSimulationWithoutBattery:
         """Should prioritize direct PV consumption over grid import."""
         # given
         params = create_simulation_params(
-            profile_base=[500] * 24,  # 500W load
+            active_base=[500] * 24,  # 500W load
         )
         pv_data = create_daytime_pv(peak_kw=0.3)  # 300W during day
 
@@ -111,7 +108,7 @@ class TestSimulationWithBattery:
     def test_should_reduce_grid_import_with_battery(self):
         """Should reduce grid import when battery stores daytime surplus."""
         # given
-        params = create_simulation_params(profile_base=[200] * 24)
+        params = create_simulation_params(active_base=[200] * 24)
         pv_data = create_daytime_pv(peak_kw=0.8)
 
         # when
@@ -125,7 +122,7 @@ class TestSimulationWithBattery:
         """Should reduce feed-in when battery absorbs surplus."""
         # given
         params = create_simulation_params(
-            profile_base=[100] * 24,
+            active_base=[100] * 24,
             inverter_limit_kw=None,
         )
         pv_data = create_daytime_pv(peak_kw=1.0)
@@ -140,7 +137,7 @@ class TestSimulationWithBattery:
     def test_should_count_battery_cycles(self):
         """Should track battery full cycles correctly."""
         # given
-        params = create_simulation_params(profile_base=[300] * 24)
+        params = create_simulation_params(active_base=[300] * 24)
         pv_data = create_daytime_pv(peak_kw=1.0)
         battery_capacity = 2.0
 
@@ -166,9 +163,9 @@ class TestSimulationWithBattery:
         """Should not discharge battery below minimum SoC."""
         # given
         params = create_simulation_params(
-            min_soc_summer_pct=50,
-            min_soc_winter_pct=50,
-            profile_base=[500] * 24,  # High load to drain battery
+            min_soc_summer=50,
+            min_soc_winter=50,
+            active_base=[500] * 24,  # High load to drain battery
         )
         # Very limited PV - only enough to charge partially
         pv_data = create_daytime_pv(peak_kw=0.2)
@@ -181,9 +178,9 @@ class TestSimulationWithBattery:
         # With 50% min SoC, only half the battery is usable
         # Grid import should be higher than with no min SoC limit
         params_no_min = create_simulation_params(
-            min_soc_summer_pct=0,
-            min_soc_winter_pct=0,
-            profile_base=[500] * 24,
+            min_soc_summer=0,
+            min_soc_winter=0,
+            active_base=[500] * 24,
         )
         result_no_min = simulate(pv_data, cap_gross=battery_capacity, params=params_no_min)
         assert result.grid_import >= result_no_min.grid_import
@@ -197,7 +194,7 @@ class TestInverterLimit:
         # given
         params = create_simulation_params(
             inverter_limit_kw=0.5,  # 500W limit
-            profile_base=[0] * 24,  # No load
+            active_base=[0] * 24,  # No load
         )
         pv_data = create_constant_pv(power_kw=1.0)  # 1kW generation
 
@@ -212,7 +209,7 @@ class TestInverterLimit:
         # given
         params = create_simulation_params(
             inverter_limit_kw=2.0,  # 2kW limit
-            profile_base=[0] * 24,
+            active_base=[0] * 24,
         )
         pv_data = create_constant_pv(power_kw=0.5)  # 500W generation
 
@@ -227,7 +224,7 @@ class TestInverterLimit:
         # given
         params = create_simulation_params(
             inverter_limit_kw=None,
-            profile_base=[0] * 24,
+            active_base=[0] * 24,
         )
         pv_data = create_constant_pv(power_kw=5.0)
 
@@ -244,8 +241,8 @@ class TestDcVsAcCoupling:
     def test_should_have_higher_feed_in_with_dc_coupling(self):
         """Should have higher feed-in with DC coupling due to more efficient battery charging."""
         # given
-        params_dc = create_simulation_params(dc_coupled=True, profile_base=[300] * 24)
-        params_ac = create_simulation_params(dc_coupled=False, profile_base=[300] * 24)
+        params_dc = create_simulation_params(dc_coupled=True, active_base=[300] * 24)
+        params_ac = create_simulation_params(dc_coupled=False, active_base=[300] * 24)
         pv_data = create_daytime_pv(peak_kw=0.8)
         battery_capacity = 3.0
 
@@ -265,8 +262,8 @@ class TestDcVsAcCoupling:
         # given
         # Use a scenario where battery doesn't always fill completely
         # so DC's more efficient charging results in more stored energy
-        params_dc = create_simulation_params(dc_coupled=True, profile_base=[400] * 24)
-        params_ac = create_simulation_params(dc_coupled=False, profile_base=[400] * 24)
+        params_dc = create_simulation_params(dc_coupled=True, active_base=[400] * 24)
+        params_ac = create_simulation_params(dc_coupled=False, active_base=[400] * 24)
         # Moderate PV that won't always fill the battery
         pv_data = create_daytime_pv(peak_kw=0.6)
         battery_capacity = 5.0
@@ -292,14 +289,14 @@ class TestSeasonalSocLimits:
         pv_data = create_daytime_pv(peak_kw=0.5, hours=hours_january)
         
         params_different_limits = create_simulation_params(
-            min_soc_summer_pct=10,
-            min_soc_winter_pct=50,  # Higher minimum in winter
-            profile_base=[500] * 24,
+            min_soc_summer=10,
+            min_soc_winter=50,  # Higher minimum in winter
+            active_base=[500] * 24,
         )
         params_same_limits = create_simulation_params(
-            min_soc_summer_pct=10,
-            min_soc_winter_pct=10,
-            profile_base=[500] * 24,
+            min_soc_summer=10,
+            min_soc_winter=10,
+            active_base=[500] * 24,
         )
 
         # when
@@ -352,8 +349,8 @@ class TestBatteryLosses:
     def test_should_apply_battery_losses(self):
         """Should reduce effective battery capacity due to charge/discharge losses."""
         # given
-        params_high_loss = create_simulation_params(batt_loss_pct=20, profile_base=[300] * 24)
-        params_low_loss = create_simulation_params(batt_loss_pct=5, profile_base=[300] * 24)
+        params_high_loss = create_simulation_params(batt_loss=20, active_base=[300] * 24)
+        params_low_loss = create_simulation_params(batt_loss=5, active_base=[300] * 24)
         pv_data = create_daytime_pv(peak_kw=0.8)
 
         # when
@@ -375,15 +372,15 @@ class TestFlexibleLoad:
         flex_delta[12] = 500  # Add 500W at noon
         
         params_flex = create_simulation_params(
-            flex_load_enabled=True,
+            flex_enabled=True,
             flex_min_yield=1.0,  # Low threshold
-            flex_pool_size=365,
+            flex_pool=365,
             flex_delta=flex_delta,
-            profile_base=[200] * 24,
+            active_base=[200] * 24,
         )
         params_no_flex = create_simulation_params(
-            flex_load_enabled=False,
-            profile_base=[200] * 24,
+            flex_enabled=False,
+            active_base=[200] * 24,
         )
         # High PV to trigger flex
         pv_data = create_daytime_pv(peak_kw=1.0)
@@ -402,11 +399,11 @@ class TestFlexibleLoad:
         flex_delta[12] = 500
         
         params = create_simulation_params(
-            flex_load_enabled=True,
+            flex_enabled=True,
             flex_min_yield=100.0,  # Very high threshold - never reached
-            flex_pool_size=365,
+            flex_pool=365,
             flex_delta=flex_delta,
-            profile_base=[200] * 24,
+            active_base=[200] * 24,
         )
         pv_data = create_daytime_pv(peak_kw=0.1)  # Very low PV
 
@@ -425,12 +422,12 @@ class TestFlexibleLoad:
         pool_size = 3
         
         params = create_simulation_params(
-            flex_load_enabled=True,
+            flex_enabled=True,
             flex_min_yield=0.1,  # Very low threshold - always triggers if pool available
-            flex_pool_size=pool_size,
-            flex_refresh_rate=0.0,  # No refresh - pool depletes completely
+            flex_pool=pool_size,
+            flex_refresh=0.0,  # No refresh - pool depletes completely
             flex_delta=flex_delta,
-            profile_base=[200] * 24,
+            active_base=[200] * 24,
         )
         # PV for 10 consecutive sunny days (enough to deplete pool)
         hours_10_days = 10 * 24
@@ -454,12 +451,12 @@ class TestFlexibleLoad:
         refresh_rate = 1.0  # Fully refresh 1 use per day
         
         params = create_simulation_params(
-            flex_load_enabled=True,
+            flex_enabled=True,
             flex_min_yield=5.0,  # Moderate threshold
-            flex_pool_size=pool_size,
-            flex_refresh_rate=refresh_rate,
+            flex_pool=pool_size,
+            flex_refresh=refresh_rate,
             flex_delta=flex_delta,
-            profile_base=[200] * 24,
+            active_base=[200] * 24,
         )
         
         # Pattern: 2 sunny days (use pool), 2 cloudy days (refresh pool), 2 sunny days (use again)
@@ -497,14 +494,14 @@ class TestPeriodicLoad:
         periodic_delta[0] = 1000  # Add 1kW at midnight
         
         params_periodic = create_simulation_params(
-            periodic_load_enabled=True,
-            periodic_interval_days=1,  # Every day
+            periodic_enabled=True,
+            periodic_days=1,  # Every day
             periodic_delta=periodic_delta,
-            profile_base=[100] * 24,
+            active_base=[100] * 24,
         )
         params_no_periodic = create_simulation_params(
-            periodic_load_enabled=False,
-            profile_base=[100] * 24,
+            periodic_enabled=False,
+            active_base=[100] * 24,
         )
         pv_data = np.zeros(8760)
 
@@ -521,16 +518,16 @@ class TestPeriodicLoad:
         periodic_delta = [1000] * 24  # Add 1kW all day
         
         params_every_day = create_simulation_params(
-            periodic_load_enabled=True,
-            periodic_interval_days=1,
+            periodic_enabled=True,
+            periodic_days=1,
             periodic_delta=periodic_delta,
-            profile_base=[100] * 24,
+            active_base=[100] * 24,
         )
         params_every_third = create_simulation_params(
-            periodic_load_enabled=True,
-            periodic_interval_days=3,
+            periodic_enabled=True,
+            periodic_days=3,
             periodic_delta=periodic_delta,
-            profile_base=[100] * 24,
+            active_base=[100] * 24,
         )
         pv_data = np.zeros(8760)
 

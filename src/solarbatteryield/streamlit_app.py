@@ -10,9 +10,7 @@ import streamlit as st
 # Configure page first (must be first Streamlit command)
 st.set_page_config(page_title="SolarBatterYield - PV-Analyse mit Speichervergleich", page_icon="☀️", layout="wide")
 
-# Import application modules
 from solarbatteryield.api import get_pvgis_hourly, PVGISError, APIError
-from solarbatteryield.config import DEFAULTS
 from solarbatteryield.models import (
     SimulationConfig, LocationConfig, ConsumptionConfig, PVSystemConfig,
     StorageConfig, EconomicsConfig, PVModule, StorageOption,
@@ -20,7 +18,6 @@ from solarbatteryield.models import (
 )
 from solarbatteryield.simulation import simulate
 from solarbatteryield.state import init_session_state, sv
-# Import from packages (new modular structure)
 from solarbatteryield.sidebar import render_sidebar
 from solarbatteryield.report import render_report, render_landing_page
 
@@ -191,8 +188,8 @@ def run_simulations(config: SimulationConfig, pv_total: np.ndarray,
             config.pv_system.base_cost + s.cost
         ))
 
-    # Get simulation parameters from config
-    sim_params = config.to_simulation_params()
+    # Get simulation input from config
+    sim_params = config.to_simulation_input()
 
     results = AnalysisResult(pv_generation_total=pv_gen_total)
     

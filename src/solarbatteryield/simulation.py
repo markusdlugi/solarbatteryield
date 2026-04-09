@@ -10,7 +10,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from solarbatteryield.models import SimulationParams, MonthlyData, HourlyResult, SimulationResult, WeeklyHourlyData
+from solarbatteryield.models import SimulationInput, MonthlyData, HourlyResult, SimulationResult, WeeklyHourlyData
 from solarbatteryield.h0_profile import get_h0_load, get_day_type, get_season, DayType, Season
 from solarbatteryield.inverter_efficiency import (
     get_inverter_efficiency,
@@ -77,7 +77,7 @@ class SimulationState:
 def _calculate_hourly_load(
     hour: int,
     current_date: date,
-    params: SimulationParams,
+    params: SimulationInput,
     day: int,
     use_flex_today: bool,
     hour_index: int = 0,
@@ -90,15 +90,16 @@ def _calculate_hourly_load(
     For expert mode: Uses uploaded yearly hourly profile directly
     """
     month = current_date.month
+    consumption = params.consumption
     
     if params.use_yearly_profile():
         # Expert mode: Use the yearly profile directly
         # Profile values are in Watts, convert to kWh
-        load = params.yearly_profile[hour_index] / 1000
+        load = consumption.yearly_profile[hour_index] / 1000
     elif params.use_h0_profile():
         # Simple mode: Use H0 profile
         # get_h0_load returns kWh directly
-        load = get_h0_load(hour, current_date, params.annual_kwh)
+        load = get_h0_load(hour, current_date, consumption.annual_kwh)
     else:
         # Advanced mode: Use user-provided profiles
         day_type = get_day_type(current_date)
@@ -106,34 +107,34 @@ def _calculate_hourly_load(
         # Select appropriate profile based on day type
         if params.has_day_type_profiles():
             if day_type == DayType.SATURDAY:
-                profile = params.profile_saturday
+                profile = consumption.profile_saturday
             elif day_type == DayType.SUNDAY:
-                profile = params.profile_sunday
+                profile = consumption.profile_sunday
             else:
-                profile = params.profile_base
+                profile = consumption.active_base
         else:
-            profile = params.profile_base
+            profile = consumption.active_base
         
         # Get base load from profile (convert W to kWh)
         load = profile[hour] / 1000
         
         # Apply seasonal scaling (only in advanced mode)
-        if params.seasonal_enabled:
+        if consumption.seasonal_enabled:
             season = get_season(month, current_date.day)
             season_factors = {
-                Season.WINTER: params.season_winter_pct / 100,
-                Season.SUMMER: params.season_summer_pct / 100,
+                Season.WINTER: consumption.season_winter_pct / 100,
+                Season.SUMMER: consumption.season_summer_pct / 100,
                 Season.TRANSITION: 1.0,
             }
             load *= season_factors[season]
     
     # Add flexible load if applicable
     if use_flex_today:
-        load += params.flex_delta[hour] / 1000
+        load += consumption.flex_delta[hour] / 1000
     
     # Add periodic load if applicable
-    if params.periodic_load_enabled and day % params.periodic_interval_days == 0:
-        load += params.periodic_delta[hour] / 1000
+    if consumption.periodic_enabled and day % consumption.periodic_days == 0:
+        load += consumption.periodic_delta[hour] / 1000
     
     return load
 
@@ -292,19 +293,20 @@ def _update_flex_pool(
     pv_raw: np.ndarray,
     hour_index: int,
     state: SimulationState,
-    params: SimulationParams,
+    params: SimulationInput,
 ) -> None:
     """Update flexible load pool at the start of each day."""
     if hour != 0:
         return
     
     day_yield = sum(pv_raw[hour_index: hour_index + 24])
+    consumption = params.consumption
     
     # Refresh pool every day (e.g., new laundry accumulates daily)
-    state.flex_pool = min(float(params.flex_pool_size), state.flex_pool + params.flex_refresh_rate)
+    state.flex_pool = min(float(consumption.flex_pool), state.flex_pool + consumption.flex_refresh)
     
-    if (params.flex_load_enabled and 
-        day_yield > params.flex_min_yield and 
+    if (consumption.flex_enabled and 
+        day_yield > consumption.flex_min_yield and 
         state.flex_pool >= 1.0):
         state.use_flex_today = True
         state.flex_pool -= 1.0
@@ -354,7 +356,7 @@ def _build_weekly_trackers(data_year: int, cap_gross: float) -> list[_WeeklyTrac
 def simulate(
     pv_raw: np.ndarray, 
     cap_gross: float, 
-    params: SimulationParams
+    params: SimulationInput
 ) -> SimulationResult:
     """
     Run hourly simulation of PV system with battery storage.
@@ -362,24 +364,25 @@ def simulate(
     Args:
         pv_raw: Array of hourly PV generation values in kWh
         cap_gross: Battery capacity in kWh
-        params: Simulation parameters dataclass
+        params: Simulation input composing consumption and storage config
         
     Returns:
         SimulationResult containing energy totals and monthly breakdown
     """
     hours = len(pv_raw)
+    storage = params.storage
     
     # Initialize state
     state = SimulationState(
-        flex_pool=float(params.flex_pool_size),
-        batt_eff=1 - params.batt_loss_pct / 100,
+        flex_pool=float(params.consumption.flex_pool),
+        batt_eff=1 - storage.batt_loss / 100,
         inv_cap=params.inverter_limit_kw if params.inverter_limit_kw is not None else float('inf'),
         inverter_efficiency_curve=params.inverter_efficiency_curve,
         batt_inverter_efficiency_curve=params.batt_inverter_efficiency_curve,
     )
     
     # Select processing function based on coupling type
-    process_hour = _process_hour_dc_coupled if params.dc_coupled else _process_hour_ac_coupled
+    process_hour = _process_hour_dc_coupled if storage.dc_coupled else _process_hour_ac_coupled
     
     # Monthly tracking
     monthly: dict[int, MonthlyData] = {m: MonthlyData() for m in range(1, 13)}
@@ -403,11 +406,11 @@ def simulate(
         
         # Set SoC limits based on season
         if get_season(month, current_date.day) == Season.WINTER:
-            state.min_soc = cap_gross * params.min_soc_winter_pct / 100
-            state.max_soc = cap_gross * params.max_soc_winter_pct / 100
+            state.min_soc = cap_gross * storage.min_soc_winter / 100
+            state.max_soc = cap_gross * storage.max_soc_winter / 100
         else:
-            state.min_soc = cap_gross * params.min_soc_summer_pct / 100
-            state.max_soc = cap_gross * params.max_soc_summer_pct / 100
+            state.min_soc = cap_gross * storage.min_soc_summer / 100
+            state.max_soc = cap_gross * storage.max_soc_summer / 100
         
         # Calculate load for this hour (handles H0, custom, and yearly profiles)
         load = _calculate_hourly_load(

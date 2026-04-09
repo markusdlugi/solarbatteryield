@@ -13,14 +13,12 @@ from solarbatteryield.models import (
     StorageConfig,
     EconomicsConfig,
     SimulationConfig,
-    SimulationParams,
     SimulationResult,
     ScenarioResult,
     AnalysisResult,
     MonthlyData,
     HourlyResult,
     PVModule,
-    StorageOption,
 )
 from solarbatteryield.inverter_efficiency import (
     INVERTER_EFFICIENCY_CURVES,
@@ -392,11 +390,11 @@ class TestSimulationConfig:
         assert limit is None
 
 
-class TestSimulationParams:
-    """Tests for simulation parameters."""
+class TestSimulationInput:
+    """Tests for simulation input composition."""
 
     def test_should_create_from_simulation_config(self):
-        """Should create SimulationParams from SimulationConfig."""
+        """Should create SimulationInput from SimulationConfig."""
         # given
         config = SimulationConfig(
             location=LocationConfig(lat=48.0, lon=11.0),
@@ -409,14 +407,42 @@ class TestSimulationParams:
         )
 
         # when
-        params = SimulationParams.from_config(config)
+        params = config.to_simulation_input()
 
         # then
         assert params.data_year == 2020
-        assert params.batt_loss_pct == 10
-        assert params.dc_coupled is True
-        assert params.profile_mode == "Einfach"
-        assert params.annual_kwh == 3000
+        assert params.storage.batt_loss == 10
+        assert params.storage.dc_coupled is True
+        assert params.consumption.profile_mode == "Einfach"
+        assert params.consumption.annual_kwh == 3000
+
+    def test_should_share_consumption_config_reference(self):
+        """Should hold reference to same ConsumptionConfig, not a copy."""
+        # given
+        config = SimulationConfig(
+            location=LocationConfig(lat=48.0, lon=11.0),
+            consumption=ConsumptionConfig(profile_mode="Erweitert", annual_kwh=4000),
+        )
+
+        # when
+        params = config.to_simulation_input()
+
+        # then
+        assert params.consumption is config.consumption
+
+    def test_should_share_storage_config_reference(self):
+        """Should hold reference to same StorageConfig, not a copy."""
+        # given
+        config = SimulationConfig(
+            location=LocationConfig(lat=48.0, lon=11.0),
+            storage=StorageConfig(batt_loss=5),
+        )
+
+        # when
+        params = config.to_simulation_input()
+
+        # then
+        assert params.storage is config.storage
 
     def test_use_h0_profile_should_return_true_for_einfach_mode(self):
         """Should return True for use_h0_profile in Einfach mode."""

@@ -26,14 +26,11 @@ Usage:
         pytest tests/test_snapshots.py --snapshot-update
 """
 import pytest
-import numpy as np
 from syrupy.assertion import SnapshotAssertion
 
-from solarbatteryield.models import SimulationParams, SimulationResult
+from solarbatteryield.models import SimulationInput, SimulationResult
 from solarbatteryield.simulation import simulate
-from solarbatteryield.inverter_efficiency import INVERTER_EFFICIENCY_CURVES
 
-# Import shared helper functions from conftest
 from conftest import (
     create_simulation_params,
     create_synthetic_pv_data,
@@ -76,13 +73,13 @@ def _result_to_snapshot_dict(result: SimulationResult) -> dict:
     }
 
 
-def _create_snapshot_params(**overrides) -> SimulationParams:
+def _create_snapshot_params(**overrides) -> SimulationInput:
     """Create simulation parameters for snapshot tests with sensible defaults."""
     # Set snapshot-specific defaults, but allow overrides to take precedence
     snapshot_defaults = {
         "inverter_limit_kw": None,  # No inverter limit by default for realistic scenarios
         "annual_kwh": 3500,
-        "profile_base": [300] * 24,  # Constant 300W load
+        "active_base": [300] * 24,  # Constant 300W load
     }
     # Merge: overrides take precedence over snapshot_defaults
     merged = {**snapshot_defaults, **overrides}
@@ -96,7 +93,7 @@ class TestScenarioNoBattery:
     def scenario_result(self) -> SimulationResult:
         """Run simulation without battery and return results."""
         params = _create_snapshot_params(
-            profile_base=create_realistic_load_profile(),
+            active_base=create_realistic_load_profile(),
         )
         pv_data = create_synthetic_pv_data()
         return simulate(pv_data, cap_gross=0.0, params=params)
@@ -117,7 +114,7 @@ class TestScenarioWithBattery:
     def scenario_results(self) -> dict[str, SimulationResult]:
         """Run simulations with different battery sizes."""
         params = _create_snapshot_params(
-            profile_base=create_realistic_load_profile(),
+            active_base=create_realistic_load_profile(),
         )
         pv_data = create_synthetic_pv_data()
         
@@ -155,11 +152,11 @@ class TestScenarioDcVsAcCoupling:
         
         params_dc = _create_snapshot_params(
             dc_coupled=True,
-            profile_base=create_realistic_load_profile(),
+            active_base=create_realistic_load_profile(),
         )
         params_ac = _create_snapshot_params(
             dc_coupled=False,
-            profile_base=create_realistic_load_profile(),
+            active_base=create_realistic_load_profile(),
         )
         
         return {
@@ -195,11 +192,11 @@ class TestScenarioInverterLimit:
         
         params_limited = _create_snapshot_params(
             inverter_limit_kw=1.5,  # 1.5 kW limit with 2 kW peak PV
-            profile_base=[100] * 24,  # Low load to maximize surplus
+            active_base=[100] * 24,  # Low load to maximize surplus
         )
         params_unlimited = _create_snapshot_params(
             inverter_limit_kw=None,
-            profile_base=[100] * 24,
+            active_base=[100] * 24,
         )
         
         return {
@@ -232,7 +229,7 @@ class TestScenarioSeasonalBehavior:
     def seasonal_result(self) -> SimulationResult:
         """Run full year simulation and return results."""
         params = _create_snapshot_params(
-            profile_base=create_realistic_load_profile(),
+            active_base=create_realistic_load_profile(),
         )
         pv_data = create_synthetic_pv_data()
         return simulate(pv_data, cap_gross=5.0, params=params)

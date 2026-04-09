@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import numpy as np
 import pytest
 
 from solarbatteryield.load_regression import (
@@ -22,7 +21,7 @@ from solarbatteryield.load_regression import (
     _DB_MAX_CONSUMPTION_W,
     DB_RESOLUTION_W,
 )
-from solarbatteryield.models import SimulationParams
+from solarbatteryield.models import SimulationInput
 from solarbatteryield.simulation import simulate
 from solarbatteryield.inverter_efficiency import INVERTER_EFFICIENCY_CURVES
 
@@ -33,7 +32,7 @@ from conftest import (
 )
 
 
-def _create_load_regression_params() -> SimulationParams:
+def _create_load_regression_params() -> SimulationInput:
     """
     Create simulation parameters specific to load regression tests.
     
@@ -42,7 +41,7 @@ def _create_load_regression_params() -> SimulationParams:
     """
     return create_simulation_params(
         annual_kwh=2821,
-        profile_base=[
+        active_base=[
             190, 170, 170, 170, 170, 170, 340, 220,
             230, 370, 260, 1040, 250, 220, 190, 200,
             200, 900, 410, 270, 860, 340, 190, 200,
@@ -50,22 +49,22 @@ def _create_load_regression_params() -> SimulationParams:
         seasonal_enabled=True,
         season_winter_pct=114,
         season_summer_pct=86,
-        flex_load_enabled=True,
+        flex_enabled=True,
         flex_min_yield=5.0,
-        flex_pool_size=3,
+        flex_pool=3,
         flex_delta=[
             0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 110, 160, 0, 0, 410,
             530, -570, 0, 0, 0, 0, 0, 0,
         ],
-        flex_refresh_rate=0.5,
-        periodic_load_enabled=True,
+        flex_refresh=0.5,
+        periodic_enabled=True,
         periodic_delta=[
             350, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0,
         ],
-        periodic_interval_days=3,
+        periodic_days=3,
     )
 
 

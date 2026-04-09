@@ -211,98 +211,33 @@ class EconomicsConfig:
 
 
 @dataclass
-class SimulationParams:
-    """Parameters for running a single simulation."""
-    # Battery
-    batt_loss_pct: float
-    dc_coupled: bool
-    min_soc_summer_pct: float
-    min_soc_winter_pct: float
-    max_soc_summer_pct: float
-    max_soc_winter_pct: float
+class SimulationInput:
+    """
+    Input data for running a simulation.
     
-    # Inverter
+    Composes ConsumptionConfig and StorageConfig by reference instead of
+    copying their fields, plus a few pre-computed values derived from
+    PVSystemConfig.
+    """
+    consumption: ConsumptionConfig
+    storage: StorageConfig
     data_year: int
     inverter_limit_kw: float | None
-    inverter_efficiency_curve: tuple[tuple[int, float], ...]  # PV inverter efficiency curve
-    
-    # Battery inverter (AC-coupled only)
-    batt_inverter_efficiency_curve: tuple[tuple[int, float], ...]  # Battery inverter efficiency curve
-    
-    # Consumption profile mode
-    profile_mode: str  # "Einfach", "Erweitert", or "Experte"
-    annual_kwh: float | None  # Required for simple mode
-    
-    # Custom consumption profiles (for advanced mode)
-    profile_base: list[float]
-    profile_saturday: list[float] | None  # None = use profile_base
-    profile_sunday: list[float] | None    # None = use profile_base
-    
-    # Full year hourly profile (expert mode only)
-    # Contains hourly consumption in Watts for the entire year
-    yearly_profile: list[float] | None
-    
-    # Seasonal scaling (advanced mode only)
-    seasonal_enabled: bool
-    season_winter_pct: float
-    season_summer_pct: float
-    
-    # Flexible load
-    flex_load_enabled: bool
-    flex_min_yield: float
-    flex_pool_size: float
-    flex_delta: list[float]
-    flex_refresh_rate: float
-    
-    # Periodic load
-    periodic_load_enabled: bool
-    periodic_delta: list[float]
-    periodic_interval_days: int
+    inverter_efficiency_curve: tuple[tuple[int, float], ...]
+    batt_inverter_efficiency_curve: tuple[tuple[int, float], ...]
     
     def use_h0_profile(self) -> bool:
         """Check if H0 standard profile should be used."""
-        return self.profile_mode == "Einfach"
+        return self.consumption.profile_mode == "Einfach"
     
     def use_yearly_profile(self) -> bool:
         """Check if full year hourly profile should be used (expert mode)."""
-        return self.profile_mode == "Experte" and self.yearly_profile is not None
+        return (self.consumption.profile_mode == "Experte"
+                and self.consumption.has_yearly_profile())
     
     def has_day_type_profiles(self) -> bool:
         """Check if separate day-type profiles are provided."""
-        return self.profile_saturday is not None and self.profile_sunday is not None
-    
-    @classmethod
-    def from_config(cls, config: "SimulationConfig") -> "SimulationParams":
-        """Create SimulationParams from a SimulationConfig."""
-        return cls(
-            batt_loss_pct=config.storage.batt_loss,
-            dc_coupled=config.storage.dc_coupled,
-            min_soc_summer_pct=config.storage.min_soc_summer,
-            min_soc_winter_pct=config.storage.min_soc_winter,
-            max_soc_summer_pct=config.storage.max_soc_summer,
-            max_soc_winter_pct=config.storage.max_soc_winter,
-            data_year=config.pv_system.data_year,
-            inverter_limit_kw=config.inverter_limit_kw,
-            inverter_efficiency_curve=config.get_inverter_efficiency_curve(),
-            batt_inverter_efficiency_curve=config.get_batt_inverter_efficiency_curve(),
-            profile_mode=config.consumption.profile_mode,
-            annual_kwh=config.consumption.annual_kwh,
-            profile_base=config.consumption.active_base,
-            profile_saturday=config.consumption.profile_saturday,
-            profile_sunday=config.consumption.profile_sunday,
-            yearly_profile=config.consumption.yearly_profile,
-            seasonal_enabled=config.consumption.seasonal_enabled,
-            season_winter_pct=config.consumption.season_winter_pct,
-            season_summer_pct=config.consumption.season_summer_pct,
-            flex_load_enabled=config.consumption.flex_enabled,
-            flex_min_yield=config.consumption.flex_min_yield,
-            flex_pool_size=config.consumption.flex_pool,
-            flex_delta=config.consumption.flex_delta,
-            flex_refresh_rate=config.consumption.flex_refresh,
-            periodic_load_enabled=config.consumption.periodic_enabled,
-            periodic_delta=config.consumption.periodic_delta,
-            periodic_interval_days=config.consumption.periodic_days,
-        )
+        return self.consumption.has_day_type_profiles()
 
 
 @dataclass
@@ -395,9 +330,16 @@ class SimulationConfig:
             missing.append("📊 **Jahreslastprofil** – CSV-Datei mit stündlichen Verbrauchsdaten hochladen")
         return len(missing) == 0, missing
     
-    def to_simulation_params(self) -> SimulationParams:
-        """Create SimulationParams from this config."""
-        return SimulationParams.from_config(self)
+    def to_simulation_input(self) -> SimulationInput:
+        """Create SimulationInput from this config."""
+        return SimulationInput(
+            consumption=self.consumption,
+            storage=self.storage,
+            data_year=self.pv_system.data_year,
+            inverter_limit_kw=self.inverter_limit_kw,
+            inverter_efficiency_curve=self.get_inverter_efficiency_curve(),
+            batt_inverter_efficiency_curve=self.get_batt_inverter_efficiency_curve(),
+        )
 
 
 @dataclass

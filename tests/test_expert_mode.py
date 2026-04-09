@@ -10,7 +10,7 @@ import numpy as np
 
 from solarbatteryield.models import (
     SimulationConfig, ConsumptionConfig, LocationConfig,
-    PVSystemConfig, StorageConfig, EconomicsConfig, SimulationParams,
+    PVSystemConfig, StorageConfig, EconomicsConfig, SimulationInput,
 )
 from solarbatteryield.inverter_efficiency import DEFAULT_INVERTER_EFFICIENCY_CURVE
 from solarbatteryield.simulation import simulate
@@ -19,7 +19,7 @@ from solarbatteryield.simulation import simulate
 from conftest import create_simulation_params
 
 
-def _create_expert_params(yearly_profile: list[float] | None = None) -> SimulationParams:
+def _create_expert_params(yearly_profile: list[float] | None = None) -> SimulationInput:
     """Create SimulationParams configured for expert mode."""
     return create_simulation_params(
         inverter_efficiency_curve=((10, 0.91), (100, 0.96)),
@@ -123,10 +123,10 @@ class TestExpertModeSimulation:
         flex_delta_watts = 500.0
         yearly_profile = [base_load_watts] * 8760
         params = _create_expert_params(yearly_profile=yearly_profile)
-        params.flex_load_enabled = True
-        params.flex_min_yield = 0.0  # Always trigger flex
-        params.flex_delta = [flex_delta_watts] * 24
-        params.flex_pool_size = 365  # Enough for every day
+        params.consumption.flex_enabled = True
+        params.consumption.flex_min_yield = 0.0  # Always trigger flex
+        params.consumption.flex_delta = [flex_delta_watts] * 24
+        params.consumption.flex_pool = 365  # Enough for every day
 
         # Create PV data that triggers flex load every day
         pv_data = np.array([0.5 if h % 24 in range(6, 18) else 0.0 for h in range(8760)])
@@ -146,9 +146,9 @@ class TestExpertModeSimulation:
         periodic_delta_watts = 300.0
         yearly_profile = [base_load_watts] * 8760
         params = _create_expert_params(yearly_profile=yearly_profile)
-        params.periodic_load_enabled = True
-        params.periodic_interval_days = 1  # Every day
-        params.periodic_delta = [periodic_delta_watts] * 24
+        params.consumption.periodic_enabled = True
+        params.consumption.periodic_days = 1  # Every day
+        params.consumption.periodic_delta = [periodic_delta_watts] * 24
         pv_data = np.zeros(8760)
 
         # when
