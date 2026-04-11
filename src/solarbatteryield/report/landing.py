@@ -18,10 +18,10 @@ def render_landing_page(missing: list[str]) -> None:
     Args:
         missing: List of missing configuration items with descriptions
     """
-    st.title("☀️ SolarBatterYield - PV-Analyse mit Speichervergleich")
+    st.title("☀️ SolarBatterYield - PV-Rechner mit Speichervergleich")
     st.markdown(
-        "Interaktive App zur Simulation und Wirtschaftlichkeitsanalyse von "
-        "Photovoltaik-Anlagen mit Batteriespeicher – optimiert für **Balkonkraftwerke**."
+        "Open-Source-Simulation von PV-Ertrag und Amortisation für Balkonkraftwerke. "
+        "Berechne die ideale Speicher-Nachrüstung und optimiere deinen Eigenverbrauch."
     )
     missing_list = "\n".join(f"- {m}" for m in missing)
     st.info(
@@ -41,4 +41,3 @@ def render_landing_page(missing: list[str]) -> None:
     )
 
     render_data_attribution()
-

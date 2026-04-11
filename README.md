@@ -1,9 +1,9 @@
-# ☀️ SolarBatterYield - PV-Analyse mit Speichervergleich
+# ☀️ SolarBatterYield - PV-Rechner mit Speichervergleich
 
 https://solarbatteryield.streamlit.app/
 
-Eine interaktive Streamlit-App zur Simulation und Wirtschaftlichkeitsanalyse von Photovoltaik-Anlagen mit
-Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlagen.
+Open-Source-Tool zur Simulation von PV-Ertrag und Amortisation. Fokus auf Balkonkraftwerke, Speicher-Nachrüstung und
+realistische Lastprofile.
 
 <p align="center">
   <picture>
@@ -15,45 +15,44 @@ Batteriespeicher – optimiert für **Balkonkraftwerke** und kleine Aufdachanlag
 
 ## Features
 
-- **PVGIS-Integration** – Stündliche PV-Ertragsdaten direkt von der EU-Datenbank (2005–2020)
-- **Standortsuche** – Koordinaten per Ortsname via OpenStreetMap Nominatim
-- **Flexible PV-Konfiguration** – Beliebig viele Module mit individueller Leistung, Ausrichtung und Neigung
-- **Wechselrichter-Limit** – 800 W Standard (Balkonkraftwerk), deaktivierbar für größere Anlagen
-- **Lastabhängiger Wechselrichter-Wirkungsgrad** – Realistische Effizienz basierend auf CEC-Daten von 3.000+
-  Wechselrichtern:
-    - Drei Voreinstellungen: Pessimistisch (P10), Median (P50), Optimistisch (P90)
-    - Optional: Eigene Wirkungsgradkurve für Experten
-- **DC- und AC-gekoppelte Speicher** – Korrekte Simulation beider Anbindungsarten:
-    - **DC-gekoppelt**: Batterie lädt direkt von den PV-Modulen, Wechselrichter-Limit gilt nur für die AC-Seite
-    - **AC-gekoppelt**: Wechselrichter begrenzt den gesamten PV-Ertrag, eigener Wechselrichter für die Batterie möglich
-- **BDEW H0-Standardlastprofil** – Realistisches Lastprofil mit Unterscheidung nach:
-    - Werktagen, Samstagen und Sonn-/Feiertagen
-    - Jahreszeiten (Winter, Frühling, Sommer, Herbst)
-    - Deutsche Feiertage werden automatisch berücksichtigt
-- **Erweiterter Verbrauchsmodus** – Eigene stündliche Lastprofile inklusive:
-    - **Wochentag-Unterscheidung**: Unterschiedliche Profile für Werktage, Samstage und Sonn-/Feiertage
-    - **Saisonale Skalierung**: Automatische Anpassung der Lastprofile je nach Jahreszeit
-    - **Lastverschiebung** – Optionale Zusatzlast an ertragreichen Sonnentagen (z. B. Waschmaschine)
-    - **Periodische Zusatzlast** – Regelmäßiger Verbrauch unabhängig vom Wetter (z. B. Warmwasser-Desinfektion)
-- **Experten-Verbrauchsmodus** - Upload von eigenen Smart-Meter-Daten (CSV) für präzise Ergebnisse
-- **Einspeisevergütung** – Berücksichtigung der Vergütung in allen Wirtschaftlichkeitsberechnungen
-- **Mehrere Speicher-Szenarien** – Vergleich von „Ohne Speicher" bis zu beliebig vielen Batterie-Optionen
-- **Langzeitvergleich PV vs. ETF** – Kumulierte Rendite über konfigurierbare Laufzeit
-- **Konfiguration teilen** – Alle Parameter als komprimierter URL-Parameter
+### ☀️ Photovoltaik & Hardware
+
+* 🔌 Flexible PV-Konfiguration – Beliebig viele Module mit individueller Leistung, Ausrichtung und Neigung.
+* 📉 Realistische Wirkungsgrade – Simulation basierend auf CEC-Daten von 3.000+ Wechselrichtern
+  (P10/P50/P90-Voreinstellungen oder eigene Kurven).
+* ⚡ DC- & AC-Kopplung – Korrekte Abbildung beider Systemwelten (z. B. Speicher vor oder nach dem Wechselrichter).
+* 🛑 Wechselrichter-Limit – Einstellbare Begrenzung (z. B. 800 W für BKW), für große Anlagen deaktivierbar.
+
+### 🏠 Verbrauch & Lastprofile
+
+* 📊 Dynamische Lastprofile – Unterscheidung nach Wochentagen, Jahreszeiten und Berücksichtigung deutscher Feiertage.
+* 🧺 Intelligente Lastverschiebung – Simulation von Zusatzverbrauch an Sonnentagen (z. B. Waschmaschine/Spülmaschine).
+* 🚿 Periodische Zusatzlasten – Abbildung von regelmäßigen Verbräuchen wie Warmwasser-Desinfektion
+  (Legionellenschaltung).
+* 📂 Experten-Modus – CSV-Upload eigener Smart-Meter-Daten für maximale Präzision.
+
+### 💰 Wirtschaftlichkeit & Analyse
+
+* 🔋 Speicher-Vergleichsszenarien – Direkter Vergleich verschiedener Kapazitäten von "Ohne Speicher" bis hin zu mehreren
+  Batterie-Optionen.
+* 📈 PV vs. ETF-Rendite – Langfristiger Vergleich der kumulierten Rendite inklusive optionaler Reinvestition der
+  Ersparnis.
+* 🪙 Einspeisevergütung – Optionale Berücksichtigung aktueller Vergütungssätze in der Amortisationsrechnung.
+* 🔗 Konfiguration teilen – Alle Parameter können via Deep-Link geteilt werden.
 
 ## Bedienung
 
 Die Konfiguration erfolgt über die **Seitenleiste** in sieben aufklappbaren Abschnitten:
 
-| Abschnitt                      | Inhalt                                                                         |
-|--------------------------------|--------------------------------------------------------------------------------|
-| 📍 **Standort**                | Ort suchen oder Koordinaten manuell eingeben                                   |
-| 💡 **Verbrauch**               | Jahresverbrauch, Lastprofil, Lastverschiebung, periodische Zusatzlast          |
-| ☀️ **PV-Module**               | Module (Leistung, Ausrichtung, Neigung), Systemkosten                          |
-| ⚡ **PV-Konfiguration**         | PVGIS-Datenjahr, Systemverluste, WR-Wirkungsgrad, Wechselrichter-Limit         |
-| 🔋 **Speicher-Optionen**       | Ausbaustufen (Kapazität, Aufpreis)                                             |
-| 🪫 **Speicher-Konfiguration**  | DC/AC-Kopplung, Batterie-WR, Lade-/Entladeverluste, SoC-Grenzen                |
-| 💰 **Preise & Vergleich**      | Strompreis, Preissteigerung, Einspeisevergütung, ETF-Rendite, Analyse-Horizont |
+| Abschnitt                     | Inhalt                                                                         |
+|-------------------------------|--------------------------------------------------------------------------------|
+| 📍 **Standort**               | Ort suchen oder Koordinaten manuell eingeben                                   |
+| 💡 **Verbrauch**              | Jahresverbrauch, Lastprofil, Lastverschiebung, periodische Zusatzlast          |
+| ☀️ **PV-Module**              | Module (Leistung, Ausrichtung, Neigung), Systemkosten                          |
+| ⚡ **PV-Konfiguration**        | PVGIS-Datenjahr, Systemverluste, WR-Wirkungsgrad, Wechselrichter-Limit         |
+| 🔋 **Speicher-Optionen**      | Ausbaustufen (Kapazität, Aufpreis)                                             |
+| 🪫 **Speicher-Konfiguration** | DC/AC-Kopplung, Batterie-WR, Lade-/Entladeverluste, SoC-Grenzen                |
+| 💰 **Preise & Vergleich**     | Strompreis, Preissteigerung, Einspeisevergütung, ETF-Rendite, Analyse-Horizont |
 
 Die Abschnitte **PV-Module** und **Speicher-Optionen** enthalten die häufig angepassten Einstellungen,
 während **PV-Konfiguration** und **Speicher-Konfiguration** die technischen Details bündeln.

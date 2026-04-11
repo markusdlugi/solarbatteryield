@@ -8,7 +8,7 @@ import numpy as np
 import streamlit as st
 
 # Configure page first (must be first Streamlit command)
-st.set_page_config(page_title="SolarBatterYield - PV-Analyse mit Speichervergleich", page_icon="☀️", layout="wide")
+st.set_page_config(page_title="SolarBatterYield - PV-Rechner mit Speichervergleich", page_icon="☀️", layout="wide")
 
 from solarbatteryield.api import get_pvgis_hourly, PVGISError, APIError
 from solarbatteryield.models import (
@@ -26,19 +26,19 @@ def main():
     """Main application entry point."""
     # Initialize session state
     init_session_state()
-    
+
     # Render sidebar configuration
     render_sidebar()
-    
+
     # Read configuration from session state
     config = get_config()
-    
+
     # Validate required configuration
     is_valid, missing = config.is_valid()
     if not is_valid:
         render_landing_page(missing)
         st.stop()
-    
+
     # Fetch PV data and run simulation
     try:
         pv_total, pv_gen_total = fetch_pv_data(config)
@@ -54,10 +54,10 @@ def main():
     except ValueError as exc:
         st.error(f"⚠️ Konfigurationsfehler: {exc}")
         st.stop()
-    
+
     # Run simulations for all scenarios
     results = run_simulations(config, pv_total, pv_gen_total)
-    
+
     # Render report
     render_report(config, results)
 
@@ -67,7 +67,7 @@ def get_config() -> SimulationConfig:
     inverter_limit_enabled = sv("cfg_inverter_limit_enabled")
     flex_enabled = sv("cfg_flex_enabled")
     periodic_enabled = sv("cfg_periodic_enabled")
-    
+
     # Build PV modules list
     modules = [
         PVModule(
@@ -79,7 +79,7 @@ def get_config() -> SimulationConfig:
         )
         for m in st.session_state.modules
     ]
-    
+
     # Build storage options list
     storage_options = [
         StorageOption(
@@ -90,7 +90,7 @@ def get_config() -> SimulationConfig:
         )
         for s in st.session_state.storages
     ]
-    
+
     # Get day-type profiles if enabled
     use_day_types = st.session_state.get("cfg_use_day_types", False)
     profile_saturday = None
@@ -98,12 +98,12 @@ def get_config() -> SimulationConfig:
     if use_day_types and sv("cfg_profile_mode") == "Erweitert":
         profile_saturday = st.session_state.get("_profile_saturday")
         profile_sunday = st.session_state.get("_profile_sunday")
-    
+
     # Get yearly profile for expert mode
     yearly_profile = None
     if sv("cfg_profile_mode") == "Experte":
         yearly_profile = st.session_state.get("_yearly_profile")
-    
+
     return SimulationConfig(
         location=LocationConfig(
             lat=sv("cfg_lat"),
@@ -175,7 +175,7 @@ def fetch_pv_data(config: SimulationConfig) -> tuple[np.ndarray, float]:
     return pv_total, pv_gen_total
 
 
-def run_simulations(config: SimulationConfig, pv_total: np.ndarray, 
+def run_simulations(config: SimulationConfig, pv_total: np.ndarray,
                     pv_gen_total: float) -> AnalysisResult:
     """Run simulations for all storage scenarios."""
     # Build scenario list: base (no storage) + each storage option sorted by capacity
@@ -192,10 +192,10 @@ def run_simulations(config: SimulationConfig, pv_total: np.ndarray,
     sim_params = config.to_simulation_input()
 
     results = AnalysisResult(pv_generation_total=pv_gen_total)
-    
+
     for name, cap, cost in scenarios:
         sim_result = simulate(pv_total, cap, sim_params)
-        
+
         results.scenarios.append(ScenarioResult(
             name=name,
             storage_capacity=cap,
@@ -208,4 +208,3 @@ def run_simulations(config: SimulationConfig, pv_total: np.ndarray,
 
 if __name__ == "__main__":
     main()
-
