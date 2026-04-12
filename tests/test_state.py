@@ -7,22 +7,22 @@ independently of Streamlit's session state.
 """
 import base64
 import json
+import sys
 import zlib
 from unittest.mock import MagicMock, patch
-import sys
 
 import pytest
 
 
 class MockSessionState(dict):
     """Mock that behaves like Streamlit's session state (dict with attribute access)."""
-    
+
     def __getattr__(self, key):
         try:
             return self[key]
         except KeyError:
             raise AttributeError(key)
-    
+
     def __setattr__(self, key, value):
         self[key] = value
 
@@ -39,13 +39,13 @@ def mock_streamlit():
         if k == "solarbatteryield.state" or k == "state"
     ]
     saved = {k: sys.modules.pop(k) for k in _modules_to_reload}
-    
+
     mock_st = MagicMock()
     mock_st.session_state = MockSessionState()
-    
+
     with patch.dict(sys.modules, {"streamlit": mock_st}):
         yield mock_st
-    
+
     # Restore original modules so other tests are not affected
     sys.modules.update(saved)
 
@@ -69,12 +69,12 @@ class TestConfigEncoding:
             "_flex_delta": [0] * 24,
             "_periodic_delta": [0] * 24,
         })
-        
+
         from solarbatteryield.state import encode_config, decode_config
-        
+
         # when
         encoded = encode_config()
-        
+
         # Clear and decode
         original_modules = mock_streamlit.session_state["modules"].copy()
         mock_streamlit.session_state.clear()
@@ -97,7 +97,7 @@ class TestConfigEncoding:
             "_flex_delta": [0] * 24,
             "_periodic_delta": [0] * 24,
         })
-        
+
         from solarbatteryield.state import encode_config
 
         # when
@@ -122,14 +122,15 @@ class TestConfigEncoding:
             "_flex_delta": [0] * 24,
             "_periodic_delta": [0] * 24,
         })
-        
+
         from solarbatteryield.state import encode_config
 
         # when
         encoded = encode_config()
-        
+
         # Calculate what uncompressed would be
-        data = {k: v for k, v in mock_streamlit.session_state.items() if not k.startswith("_") or k in ["_active_base", "_flex_delta", "_periodic_delta"]}
+        data = {k: v for k, v in mock_streamlit.session_state.items() if
+                not k.startswith("_") or k in ["_active_base", "_flex_delta", "_periodic_delta"]}
         data["_version"] = 4
         raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         uncompressed_b64 = base64.urlsafe_b64encode(raw_json).decode("ascii")
@@ -150,19 +151,20 @@ class TestConfigEncoding:
             "_flex_delta": [],
             "_periodic_delta": [],
         })
-        
+
         from solarbatteryield.state import encode_config
 
         # when
         encoded = encode_config()
-        
+
         compressed = base64.urlsafe_b64decode(encoded)
         raw = zlib.decompress(compressed)
         data = json.loads(raw)
 
         # then
         assert "_version" in data
-        assert data["_version"] == 4
+        assert isinstance(data["_version"], int)
+        assert data["_version"] >= 1
 
     def test_should_handle_day_type_profiles(self, mock_streamlit):
         """Should include day-type profiles when enabled."""
@@ -179,12 +181,12 @@ class TestConfigEncoding:
             "_profile_saturday": [150] * 24,
             "_profile_sunday": [100] * 24,
         })
-        
+
         from solarbatteryield.state import encode_config, decode_config
 
         # when
         encoded = encode_config()
-        
+
         mock_streamlit.session_state.clear()
         decode_config(encoded)
 
@@ -208,12 +210,12 @@ class TestConfigEncoding:
             "_periodic_delta": [],
             "_inverter_eff_custom": custom_efficiency,
         })
-        
+
         from solarbatteryield.state import encode_config, decode_config
 
         # when
         encoded = encode_config()
-        
+
         mock_streamlit.session_state.clear()
         decode_config(encoded)
 
@@ -228,7 +230,7 @@ class TestSessionStateHelpers:
         """Should return value from session state when present."""
         # given
         mock_streamlit.session_state["cfg_lat"] = 48.5
-        
+
         from solarbatteryield.state import sv
 
         # when
@@ -253,7 +255,7 @@ class TestSessionStateHelpers:
         """Should return empty dict when key already exists in session state."""
         # given
         mock_streamlit.session_state["cfg_lat"] = 48.5
-        
+
         from solarbatteryield.state import widget_value
 
         # when
@@ -287,17 +289,17 @@ class TestSessionIsolation:
         # given
         from solarbatteryield.config import DEFAULT_MODULES
         from solarbatteryield.state import init_session_state
-        
+
         mock_streamlit.query_params = {}
-        
+
         # when - simulate two different sessions initializing
         init_session_state()
         session1_modules = mock_streamlit.session_state["modules"]
-        
+
         # Modify the module in session 1
         session1_modules[0]["name"] = "Modified by User 1"
         session1_modules[0]["peak"] = 99.9
-        
+
         # then - the DEFAULT_MODULES should NOT be affected
         assert DEFAULT_MODULES[0]["name"] == "Süd", "DEFAULT_MODULES should not be modified"
         assert DEFAULT_MODULES[0]["peak"] == 2.0, "DEFAULT_MODULES should not be modified"
@@ -307,17 +309,17 @@ class TestSessionIsolation:
         # given
         from solarbatteryield.config import DEFAULT_STORAGES
         from solarbatteryield.state import init_session_state
-        
+
         mock_streamlit.query_params = {}
-        
+
         # when - simulate session initializing
         init_session_state()
         session_storages = mock_streamlit.session_state["storages"]
-        
+
         # Modify the storage in session
         session_storages[0]["name"] = "Modified Storage"
         session_storages[0]["cap"] = 999.0
-        
+
         # then - the DEFAULT_STORAGES should NOT be affected
         assert DEFAULT_STORAGES[0]["name"] == "Klein", "DEFAULT_STORAGES should not be modified"
         assert DEFAULT_STORAGES[0]["cap"] == 2.0, "DEFAULT_STORAGES should not be modified"

@@ -4,10 +4,12 @@ Shared pytest fixtures for the SolarBatterYield test suite.
 This module provides common fixtures and helper functions used across multiple
 test modules to reduce duplication and ensure consistency.
 """
-import pytest
 import numpy as np
+import pytest
 
-from solarbatteryield.models import SimulationInput, ConsumptionConfig, StorageConfig
+from solarbatteryield.models import (
+    SimulationInput, ConsumptionConfig, StorageConfig, DischargeStrategyConfig,
+)
 from solarbatteryield.simulation.inverter_efficiency import (
     INVERTER_EFFICIENCY_CURVES,
 )
@@ -132,9 +134,10 @@ def create_simulation_params(**overrides) -> SimulationInput:
     Returns:
         SimulationInput with defaults merged with overrides.
     """
+
     def get(key, default):
         return overrides.get(key, default)
-    
+
     consumption = ConsumptionConfig(
         profile_mode=get('profile_mode', 'Erweitert'),
         annual_kwh=get('annual_kwh', 3000),
@@ -153,8 +156,9 @@ def create_simulation_params(**overrides) -> SimulationInput:
         periodic_enabled=get('periodic_enabled', False),
         periodic_delta=get('periodic_delta', [0] * 24),
         periodic_days=get('periodic_days', 3),
+        min_load_w_override=get('min_load_w_override', None),
     )
-    
+
     storage = StorageConfig(
         dc_coupled=get('dc_coupled', True),
         batt_loss=get('batt_loss', 10),
@@ -163,7 +167,7 @@ def create_simulation_params(**overrides) -> SimulationInput:
         min_soc_winter=get('min_soc_winter', 20),
         max_soc_winter=get('max_soc_winter', 100),
     )
-    
+
     return SimulationInput(
         consumption=consumption,
         storage=storage,
@@ -174,6 +178,9 @@ def create_simulation_params(**overrides) -> SimulationInput:
         ),
         batt_inverter_efficiency_curve=get(
             'batt_inverter_efficiency_curve', INVERTER_EFFICIENCY_CURVES["median"]
+        ),
+        discharge_strategy_config=get(
+            'discharge_strategy_config', DischargeStrategyConfig()
         ),
     )
 
@@ -212,9 +219,9 @@ def create_daytime_pv(peak_kw: float = 1.0, hours: int = 8760) -> np.ndarray:
 
 
 def create_synthetic_pv_data(
-    hours: int = 8760,
-    peak_power_kw: float = 2.0,
-    seed: int = 42,
+        hours: int = 8760,
+        peak_power_kw: float = 2.0,
+        seed: int = 42,
 ) -> np.ndarray:
     """
     Create realistic synthetic PV generation data with daily and seasonal patterns.
@@ -233,29 +240,29 @@ def create_synthetic_pv_data(
         NumPy array with synthetic PV generation data.
     """
     pv_data = np.zeros(hours)
-    
+
     for i in range(hours):
         hour = i % 24
         day = i // 24
-        
+
         # Calculate day of year (1-365)
         day_of_year = day % 365 + 1
-        
+
         # Seasonal factor: peaks in summer (day ~172), lowest in winter
         seasonal_factor = 0.5 + 0.5 * np.sin(2 * np.pi * (day_of_year - 80) / 365)
-        
+
         # Daily pattern: bell curve centered at noon
         if 5 <= hour <= 20:
             # Hours from solar noon (12)
             hours_from_noon = abs(hour - 12.5)
             # Gaussian-like curve
             daily_factor = np.exp(-0.3 * hours_from_noon ** 2)
-            
+
             # Peak power scaled by season
             pv_data[i] = peak_power_kw * seasonal_factor * daily_factor
         else:
             pv_data[i] = 0.0
-    
+
     return pv_data
 
 
@@ -274,9 +281,8 @@ def create_realistic_load_profile() -> list[float]:
     """
     return [
         150, 150, 150, 150, 150, 150,  # 00:00-05:59: Night
-        300, 400, 450, 300,            # 06:00-09:59: Morning
+        300, 400, 450, 300,  # 06:00-09:59: Morning
         250, 250, 300, 250, 250, 250,  # 10:00-15:59: Daytime
         350, 500, 550, 500, 450, 350,  # 16:00-21:59: Evening
-        200, 150,                       # 22:00-23:59: Late evening
+        200, 150,  # 22:00-23:59: Late evening
     ]
-

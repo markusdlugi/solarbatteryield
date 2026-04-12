@@ -9,16 +9,16 @@ from datetime import date, timedelta
 import numpy as np
 
 from solarbatteryield.models import SimulationInput, MonthlyData, SimulationResult
-from solarbatteryield.simulation.h0_profile import get_season, Season
-from solarbatteryield.simulation.load import calculate_hourly_load, update_flex_pool
 from solarbatteryield.simulation.battery import create_battery
+from solarbatteryield.simulation.h0_profile import get_season, Season
+from solarbatteryield.simulation.load import calculate_hourly_load, update_flex_pool, compute_min_load_w
 from solarbatteryield.simulation.weekly_recorder import WeeklySoCRecorder
 
 
 def simulate(
-    pv_raw: np.ndarray,
-    cap_gross: float,
-    params: SimulationInput,
+        pv_raw: np.ndarray,
+        cap_gross: float,
+        params: SimulationInput,
 ) -> SimulationResult:
     """
     Run hourly simulation of PV system with battery storage.
@@ -34,6 +34,12 @@ def simulate(
     hours = len(pv_raw)
     storage = params.storage
 
+    # Derive base-load floor from user's load profile or use manual override
+    if params.consumption.min_load_w_override is not None:
+        min_load_w = params.consumption.min_load_w_override
+    else:
+        min_load_w = compute_min_load_w(params)
+
     # Create battery (NoBattery when cap_gross <= 0)
     battery = create_battery(
         cap_gross=cap_gross,
@@ -42,6 +48,8 @@ def simulate(
         inv_eff_curve=params.inverter_efficiency_curve,
         dc_coupled=storage.dc_coupled,
         batt_inv_eff_curve=params.batt_inverter_efficiency_curve,
+        strategy_config=params.discharge_strategy_config,
+        min_load_w=min_load_w,
     )
 
     # Running totals

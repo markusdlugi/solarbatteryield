@@ -206,6 +206,30 @@ class TestBatteryPackageExports:
         # then
         assert callable(create_battery)
 
+    def test_should_export_discharge_strategy_config(self):
+        """Should export DischargeStrategyConfig from battery package root."""
+        # when
+        from solarbatteryield.simulation.battery import DischargeStrategyConfig
+
+        # then
+        assert DischargeStrategyConfig is not None
+
+    def test_should_export_get_discharge_target(self):
+        """Should export get_discharge_target from battery package root."""
+        # when
+        from solarbatteryield.simulation.battery import get_discharge_target
+
+        # then
+        assert callable(get_discharge_target)
+
+    def test_should_import_strategy_module(self):
+        """Should allow importing strategy module directly."""
+        # when
+        from solarbatteryield.simulation.battery.strategy import get_discharge_target
+
+        # then
+        assert callable(get_discharge_target)
+
 
 class TestSidebarPackageExports:
     """Tests for sidebar package public API."""
@@ -287,4 +311,3 @@ class TestSidebarPackageExports:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

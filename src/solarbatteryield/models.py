@@ -2,6 +2,8 @@
 Data classes for the PV analysis application.
 Provides type-safe configuration and result structures.
 """
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 
 from solarbatteryield.simulation.inverter_efficiency import (
@@ -9,6 +11,28 @@ from solarbatteryield.simulation.inverter_efficiency import (
     DEFAULT_INVERTER_EFFICIENCY_CURVE,
     INVERTER_EFFICIENCY_CURVES,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class TimeWindow:
+    """A time window for scheduled battery discharge."""
+    start_hour: int  # 0–23 (inclusive)
+    end_hour: int  # 0–23 (exclusive, wraps around midnight)
+    power_w: int  # Discharge power in watts
+
+
+@dataclass(frozen=True, slots=True)
+class DischargeStrategyConfig:
+    """Configuration for battery discharge strategy.
+
+    Modes:
+      - ``zero_feed_in``: Track load via smart meter (default, current behaviour).
+      - ``base_load``: Constant AC output of *base_load_w* watts.
+      - ``time_window``: Output according to configured time windows, 0 otherwise.
+    """
+    mode: str = "zero_feed_in"
+    base_load_w: int = 200
+    time_windows: tuple[TimeWindow, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,8 +64,8 @@ class WeeklyHourlyData:
     Used for SoC visualization in summer vs winter comparison.
     """
     hours: list[HourlySoCData] = field(default_factory=list)
-    
-    def add_hour(self, hour: int, soc: float, soc_pct: float, 
+
+    def add_hour(self, hour: int, soc: float, soc_pct: float,
                  pv_generation: float, consumption: float) -> None:
         """Add data for one hour."""
         self.hours.append(HourlySoCData(
@@ -74,7 +98,7 @@ class LocationConfig:
     """Geographic location configuration."""
     lat: float | None = None
     lon: float | None = None
-    
+
     def __post_init__(self) -> None:
         """Validate location coordinates."""
         if self.lat is not None:
@@ -90,42 +114,45 @@ class ConsumptionConfig:
     """Household consumption configuration."""
     profile_mode: str = "Einfach"  # "Einfach", "Erweitert", or "Experte"
     annual_kwh: float | None = None
-    
+
     # Load profiles (in Watts for each hour 0-23)
     # In simple mode: H0 profile is used, these are ignored
     # In advanced mode: user provides these profiles
     active_base: list[int] = field(default_factory=lambda: [0] * 24)
-    
+
     # Optional separate profiles for different day types (advanced mode only)
     # If None, active_base is used for all days
     profile_saturday: list[int] | None = None
     profile_sunday: list[int] | None = None
-    
+
     # Full year hourly profile (expert mode only)
     # Contains hourly consumption in Watts for the entire year (8760 or 8784 values)
     yearly_profile: list[float] | None = None
-    
+
     # Seasonal scaling (only used in advanced mode)
     seasonal_enabled: bool = True
     season_winter_pct: int = 114  # Winter factor (%)
-    season_summer_pct: int = 86   # Summer factor (%)
-    
+    season_summer_pct: int = 86  # Summer factor (%)
+
     # Flexible load shifting (sunny days)
     flex_enabled: bool = False
     flex_delta: list[int] = field(default_factory=lambda: [0] * 24)
     flex_min_yield: float = 5.0  # Minimum daily yield to trigger (kWh)
     flex_pool: int = 3  # Max uses in pool
     flex_refresh: float = 0.5  # Refresh rate per day
-    
+
     # Periodic load (regular interval)
     periodic_enabled: bool = False
     periodic_delta: list[int] = field(default_factory=lambda: [0] * 24)
     periodic_days: int = 3  # Interval in days
-    
+
+    # Base-load floor override (None = auto-detect from profile)
+    min_load_w_override: float | None = None
+
     def has_day_type_profiles(self) -> bool:
         """Check if separate day-type profiles are provided."""
         return self.profile_saturday is not None and self.profile_sunday is not None
-    
+
     def has_yearly_profile(self) -> bool:
         """Check if a full year hourly profile is provided (expert mode)."""
         return self.yearly_profile is not None and len(self.yearly_profile) > 0
@@ -140,15 +167,15 @@ class PVSystemConfig:
     inverter_limit_w: int = 800  # Inverter limit in Watts
     base_cost: int = 800  # Base system cost in EUR
     modules: list[PVModule] = field(default_factory=list)
-    
+
     # Inverter efficiency curve selection
     # Options: "pessimistic", "median", "optimistic", "custom"
     inverter_efficiency_preset: str = "median"
-    
+
     # Custom efficiency curve (used when inverter_efficiency_preset == "custom")
     # Format: list of efficiency values (0-100%) at power levels [10%, 20%, 30%, 50%, 75%, 100%]
     inverter_efficiency_custom: list[float] = field(default_factory=list)
-    
+
     def __post_init__(self) -> None:
         """Initialize custom efficiency with P50 defaults if empty."""
         if not self.inverter_efficiency_custom:
@@ -165,21 +192,26 @@ class StorageConfig:
     min_soc_winter: int = 20  # Min. SoC winter in %
     max_soc_winter: int = 100  # Max. SoC winter in %
     options: list[StorageOption] = field(default_factory=list)
-    
+
     # Battery inverter efficiency (AC-coupled only)
     # The battery's own bidirectional inverter for AC/DC conversion
     # Options: "pessimistic", "median", "optimistic", "custom"
     batt_inverter_preset: str = "median"
     batt_inverter_efficiency_custom: list[float] = field(default_factory=list)
-    
+
+    # Discharge strategy
+    discharge_strategy: str = "zero_feed_in"  # "zero_feed_in" | "base_load" | "time_window"
+    discharge_base_load_w: int = 200
+    discharge_time_windows: list[TimeWindow] = field(default_factory=list)
+
     def __post_init__(self) -> None:
         """Validate storage configuration and initialize defaults."""
         if not 0 <= self.batt_loss <= 50:
             raise ValueError(f"Batterieverluste müssen zwischen 0% und 50% liegen, war {self.batt_loss}%")
-        
+
         if not self.batt_inverter_efficiency_custom:
             self.batt_inverter_efficiency_custom = list(DEFAULT_INVERTER_EFFICIENCY_CUSTOM_PCT)
-        
+
         for season, min_soc, max_soc in [
             ("Sommer", self.min_soc_summer, self.max_soc_summer),
             ("Winter", self.min_soc_winter, self.max_soc_winter),
@@ -225,16 +257,19 @@ class SimulationInput:
     inverter_limit_kw: float | None
     inverter_efficiency_curve: tuple[tuple[int, float], ...]
     batt_inverter_efficiency_curve: tuple[tuple[int, float], ...]
-    
+    discharge_strategy_config: DischargeStrategyConfig = field(
+        default_factory=DischargeStrategyConfig
+    )
+
     def use_h0_profile(self) -> bool:
         """Check if H0 standard profile should be used."""
         return self.consumption.profile_mode == "Einfach"
-    
+
     def use_yearly_profile(self) -> bool:
         """Check if full year hourly profile should be used (expert mode)."""
         return (self.consumption.profile_mode == "Experte"
                 and self.consumption.has_yearly_profile())
-    
+
     def has_day_type_profiles(self) -> bool:
         """Check if separate day-type profiles are provided."""
         return self.consumption.has_day_type_profiles()
@@ -248,36 +283,36 @@ class SimulationConfig:
     pv_system: PVSystemConfig = field(default_factory=PVSystemConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
     economics: EconomicsConfig = field(default_factory=EconomicsConfig)
-    
+
     @property
     def lat(self) -> float | None:
         return self.location.lat
-    
+
     @property
     def lon(self) -> float | None:
         return self.location.lon
-    
+
     @property
     def inverter_limit_kw(self) -> float | None:
         """Get inverter limit in kW, or None if disabled."""
         if self.pv_system.inverter_limit_enabled:
             return self.pv_system.inverter_limit_w / 1000
         return None
-    
+
     @property
     def feed_in_tariff_eur(self) -> float:
         """Get feed-in tariff in EUR/kWh."""
         return self.economics.feed_in_tariff / 100
-    
+
     @property
     def total_peak_kwp(self) -> float:
         """Get total peak power of all modules."""
         return sum(m.peak for m in self.pv_system.modules)
-    
+
     @staticmethod
     def _build_efficiency_curve(
-        preset: str,
-        custom_values: list[float] | None = None,
+            preset: str,
+            custom_values: list[float] | None = None,
     ) -> tuple[tuple[int, float], ...]:
         """
         Build an efficiency curve from preset name or custom values.
@@ -299,14 +334,14 @@ class SimulationConfig:
             return INVERTER_EFFICIENCY_CURVES[preset]
         else:
             return DEFAULT_INVERTER_EFFICIENCY_CURVE
-    
+
     def get_inverter_efficiency_curve(self) -> tuple[tuple[int, float], ...]:
         """Get the PV inverter efficiency curve based on preset or custom values."""
         return self._build_efficiency_curve(
             self.pv_system.inverter_efficiency_preset,
             self.pv_system.inverter_efficiency_custom,
         )
-    
+
     def get_batt_inverter_efficiency_curve(self) -> tuple[tuple[int, float], ...]:
         """
         Get the battery inverter efficiency curve (AC-coupled only).
@@ -318,7 +353,7 @@ class SimulationConfig:
             self.storage.batt_inverter_preset,
             self.storage.batt_inverter_efficiency_custom,
         )
-    
+
     def is_valid(self) -> tuple[bool, list[str]]:
         """Check if configuration is valid for simulation."""
         missing = []
@@ -329,9 +364,14 @@ class SimulationConfig:
         if self.consumption.profile_mode == "Experte" and not self.consumption.has_yearly_profile():
             missing.append("📊 **Jahreslastprofil** – CSV-Datei mit stündlichen Verbrauchsdaten hochladen")
         return len(missing) == 0, missing
-    
+
     def to_simulation_input(self) -> SimulationInput:
         """Create SimulationInput from this config."""
+        strategy_config = DischargeStrategyConfig(
+            mode=self.storage.discharge_strategy,
+            base_load_w=self.storage.discharge_base_load_w,
+            time_windows=tuple(self.storage.discharge_time_windows),
+        )
         return SimulationInput(
             consumption=self.consumption,
             storage=self.storage,
@@ -339,6 +379,7 @@ class SimulationConfig:
             inverter_limit_kw=self.inverter_limit_kw,
             inverter_efficiency_curve=self.get_inverter_efficiency_curve(),
             batt_inverter_efficiency_curve=self.get_batt_inverter_efficiency_curve(),
+            discharge_strategy_config=strategy_config,
         )
 
 
@@ -351,7 +392,7 @@ class MonthlyData:
     feed_in: float = 0.0  # Grid feed-in in kWh
     consumption: float = 0.0  # Total consumption in kWh
     pv_generation: float = 0.0  # Total PV generation in kWh
-    
+
     def add_hourly_result(self, result: HourlyResult) -> None:
         """
         Add hourly simulation result values to monthly totals.
@@ -376,7 +417,7 @@ class SimulationResult:
     curtailed: float  # Total curtailed energy (kWh)
     monthly: dict[int, MonthlyData]  # Monthly breakdown
     full_cycles: float = 0.0  # Number of full battery cycles per year
-    
+
     # Weekly SoC data for detailed visualization (optional)
     # First week of July (summer), January (winter), and April (transition)
     weekly_summer: WeeklyHourlyData | None = None
@@ -391,39 +432,39 @@ class ScenarioResult:
     storage_capacity: float  # Battery capacity in kWh
     investment_cost: float  # Total investment in EUR
     simulation: SimulationResult  # Simulation results
-    
+
     # Delegate energy values to simulation
     @property
     def grid_import(self) -> float:
         return self.simulation.grid_import
-    
+
     @property
     def total_consumption(self) -> float:
         return self.simulation.total_consumption
-    
+
     @property
     def feed_in(self) -> float:
         return self.simulation.feed_in
-    
+
     @property
     def curtailed(self) -> float:
         return self.simulation.curtailed
-    
+
     @property
     def monthly(self) -> dict[int, MonthlyData]:
         return self.simulation.monthly
-    
+
     @property
     def full_cycles(self) -> float:
         return self.simulation.full_cycles
-    
+
     @property
     def autarky(self) -> float:
         """Calculate autarky percentage."""
         if self.total_consumption > 0:
             return (1 - self.grid_import / self.total_consumption) * 100
         return 0.0
-    
+
     @property
     def self_consumption(self) -> float:
         """Calculate self-consumption percentage."""
@@ -432,12 +473,12 @@ class ScenarioResult:
             self_consumed = pv_generation - self.feed_in - self.curtailed
             return (self_consumed / pv_generation) * 100
         return 0.0
-    
+
     @property
     def saved_kwh(self) -> float:
         """Calculate saved energy from grid."""
         return self.total_consumption - self.grid_import
-    
+
     def annual_savings(self, e_price: float, feed_in_tariff: float) -> float:
         """Calculate annual savings in EUR."""
         return self.saved_kwh * e_price + self.feed_in * feed_in_tariff
@@ -448,22 +489,24 @@ class AnalysisResult:
     """Collection of all scenario results."""
     scenarios: list[ScenarioResult] = field(default_factory=list)
     pv_generation_total: float = 0.0  # Total PV generation in kWh
-    
+    min_load_w: float = 0.0  # Effective base-load floor used in simulation (W)
+
     @property
     def total_consumption(self) -> float:
         """Get total consumption (same for all scenarios)."""
         if self.scenarios:
             return self.scenarios[0].total_consumption
         return 0.0
-    
-    def get_best_scenario(self, e_price: float, e_inc: float, 
+
+    def get_best_scenario(self, e_price: float, e_inc: float,
                           feed_in_tariff: float, years: int) -> ScenarioResult:
         """Find the scenario with highest profit over the analysis period."""
+
         def calculate_profit(s: ScenarioResult) -> float:
             total_savings = sum(
                 s.saved_kwh * e_price * (1 + e_inc) ** y + s.feed_in * feed_in_tariff
                 for y in range(years)
             )
             return total_savings - s.investment_cost
-        
+
         return max(self.scenarios, key=calculate_profit)

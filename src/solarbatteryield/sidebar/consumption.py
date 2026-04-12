@@ -9,13 +9,13 @@ import pandas as pd
 import streamlit as st
 
 from solarbatteryield.config import PROFILE_SATURDAY, PROFILE_SUNDAY, LIMITS, scale_profiles
-from solarbatteryield.state import sv, widget_value, radio_index
 from solarbatteryield.sidebar.profile_io import (
     generate_yearly_template_csv,
     parse_yearly_profile_csv,
     get_hours_in_year,
     calculate_profile_stats,
 )
+from solarbatteryield.state import sv, widget_value, radio_index
 
 
 def render_consumption_section() -> None:
@@ -54,6 +54,9 @@ def render_consumption_section() -> None:
             _render_advanced_mode()
         else:  # Experte
             _render_expert_mode()
+
+        # Base load display + override (all modes)
+        _render_base_load_section()
 
 
 def _render_simple_mode() -> None:
@@ -300,3 +303,109 @@ def _render_periodic_load_settings() -> None:
             st.session_state._periodic_delta = new_periodic
             st.rerun()
 
+
+def _render_base_load_section() -> None:
+    """Render base load (Grundlast) display and optional manual override.
+
+    Computes the estimated base load from the current load profile settings.
+    """
+    st.divider()
+
+    # Compute base load estimate from current settings
+    computed = _compute_base_load_estimate()
+    if computed is not None:
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.caption(f"🔌 Geschätzte Grundlast: **{computed:.0f} W**")
+        with col2:
+            st.caption(
+                "ℹ️",
+                help="Die Grundlast ist der dauerhafte Mindestverbrauch deines "
+                     "Haushalts (Kühlschrank, Router, Standby-Geräte). "
+                     "Sie wird aus dem Lastprofil geschätzt.\n\n"
+                     "**Verwendung in der Simulation:** Die Regression modelliert "
+                     "sub-stündliche Lastschwankungen. Da die Grundlast *immer* "
+                     "anliegt, wird sie als fester Sockel behandelt — PV-Strom "
+                     "bis zur Grundlast wird garantiert selbst verbraucht.",
+            )
+
+    st.toggle(
+        "🔌 Grundlast manuell festlegen",
+        key="cfg_min_load_w_override_enabled",
+        help="Wenn du deine tatsächliche Grundlast kennst (z. B. per "
+             "Smart-Meter gemessen), kannst du den geschätzten Wert hier "
+             "überschreiben.",
+        **widget_value("cfg_min_load_w_override_enabled"),
+    )
+
+    if sv("cfg_min_load_w_override_enabled"):
+        # Use computed estimate as default, fallback to 150W
+        default_override = int(computed) if computed is not None else 150
+        st.number_input(
+            "Grundlast (W)", min_value=0, max_value=1000, step=10,
+            key="cfg_min_load_w_override",
+            help="Dauerhafte Mindestleistung des Haushalts in Watt "
+                 "(z. B. Kühlschrank + Router + Standby-Geräte).",
+            **widget_value("cfg_min_load_w_override", default=default_override),
+        )
+
+
+def _compute_base_load_estimate() -> float | None:
+    """
+    Compute the base load estimate from current sidebar settings.
+    
+    Returns the estimated base load in watts, or None if insufficient data.
+    """
+    from datetime import date
+    from solarbatteryield.simulation.h0_profile import get_h0_load
+
+    # Hourly average → instantaneous base load conversion factor
+    _HOURLY_TO_BASE_RATIO = 0.9
+
+    profile_mode = sv("cfg_profile_mode")
+
+    if profile_mode == "Experte":
+        # Expert mode: use uploaded yearly profile
+        yearly_profile = st.session_state.get("_yearly_profile")
+        if yearly_profile and len(yearly_profile) > 0:
+            min_hourly_w = float(min(yearly_profile))
+            return max(0.0, min_hourly_w * _HOURLY_TO_BASE_RATIO)
+        return None
+
+    if profile_mode == "Einfach":
+        # Simple mode: use H0 profile
+        annual_kwh = sv("cfg_annual_kwh")
+        if annual_kwh is None:
+            return None
+
+        data_year = sv("cfg_year") or 2015
+        min_load_kwh = float("inf")
+        sample_dates = [
+            date(data_year, 1, 15),  # winter weekday
+            date(data_year, 1, 18),  # winter Saturday
+            date(data_year, 1, 19),  # winter Sunday
+            date(data_year, 4, 15),  # transition
+            date(data_year, 7, 15),  # summer weekday
+            date(data_year, 7, 18),  # summer Saturday
+            date(data_year, 7, 19),  # summer Sunday
+        ]
+        for d in sample_dates:
+            for hour in range(24):
+                load_kwh = get_h0_load(hour, d, annual_kwh)
+                min_load_kwh = min(min_load_kwh, load_kwh)
+
+        return max(0.0, min_load_kwh * 1000 * _HOURLY_TO_BASE_RATIO)
+
+    # Advanced mode: use active_base profile
+    active_base = st.session_state.get("_active_base")
+    if not active_base:
+        return None
+
+    base_min = min(active_base)
+
+    # Apply seasonal scaling if enabled
+    if sv("cfg_seasonal_enabled"):
+        season_summer_pct = sv("cfg_season_summer") or 100
+        base_min *= season_summer_pct / 100
+
+    return max(0.0, float(base_min) * _HOURLY_TO_BASE_RATIO)

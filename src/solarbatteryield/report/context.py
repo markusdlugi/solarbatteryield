@@ -106,3 +106,12 @@ class ReportContext:
         """Total PV peak power in kWp."""
         return self.config.total_peak_kwp
 
+    @property
+    def min_load_w(self) -> float:
+        """Effective base-load floor used in simulation (W)."""
+        return self.results.min_load_w
+
+    @property
+    def min_load_w_is_override(self) -> bool:
+        """Whether the base-load floor is a manual override."""
+        return self.config.consumption.min_load_w_override is not None

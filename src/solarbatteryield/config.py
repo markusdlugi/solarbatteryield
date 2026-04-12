@@ -2,11 +2,11 @@
 Configuration constants and default values for the PV analysis application.
 All default values are centralized here as a single source of truth.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 from solarbatteryield.simulation.h0_profile import H0_TRANSITION, get_season, Season
-from datetime import date
 
 
 # ─── Default consumption profiles (Watt per hour 0–23) ─────────
@@ -35,6 +35,7 @@ def _compute_profile_scale(target_kwh: float = 3000.0, year: int = 2015,
         else:
             weighted_days += 1.0
     return target_kwh / (base_kwh_day * weighted_days)
+
 
 _PROFILE_SCALE: float = _compute_profile_scale()
 
@@ -65,6 +66,7 @@ def scale_profiles(annual_kwh: float) -> tuple[list[int], list[int], list[int]]:
         [round(v * ratio) for v in PROFILE_SATURDAY],
         [round(v * ratio) for v in PROFILE_SUNDAY],
     )
+
 
 FLEX_DELTA_DEFAULT: list[int] = [0] * 24
 
@@ -98,25 +100,25 @@ class ConfigDefaults:
     # Location
     lat: float | None = None
     lon: float | None = None
-    
+
     # Consumption
     # Profile modes: "Einfach" (H0), "Erweitert" (custom daily), "Experte" (full year CSV)
     profile_mode: str = "Einfach"
     annual_kwh: float | None = None
     seasonal_enabled: bool = True
     season_winter: int = 114  # Winter factor % (H0 ideal: 113.85%)
-    season_summer: int = 86   # Summer factor % (H0 ideal: 85.54%)
-    
+    season_summer: int = 86  # Summer factor % (H0 ideal: 85.54%)
+
     # Flexible load
     flex_enabled: bool = False
     flex_min_yield: float = 5.0  # kWh
     flex_pool: int = 3
     flex_refresh: float = 0.5
-    
+
     # Periodic load
     periodic_enabled: bool = False
     periodic_days: int = 3
-    
+
     # PV System
     year: int = 2015
     loss: int = 9  # System losses % (DC-side only, excludes inverter losses)
@@ -124,7 +126,7 @@ class ConfigDefaults:
     inverter_limit_enabled: bool = True
     inverter_limit_w: int = 800  # Watts
     base_cost: int = 800  # EUR
-    
+
     # Storage
     dc_coupled: str = "DC-gekoppelt"
     batt_loss: int = 7  # Cell charge/discharge loss %
@@ -133,7 +135,15 @@ class ConfigDefaults:
     max_soc_summer: int = 100  # Max SoC summer %
     min_soc_winter: int = 20  # Min SoC winter %
     max_soc_winter: int = 100  # Max SoC winter %
-    
+
+    # Discharge strategy
+    discharge_strategy: str = "zero_feed_in"  # "zero_feed_in" | "base_load" | "time_window"
+    discharge_base_load_w: int = 200
+
+    # Base-load floor override
+    min_load_w_override_enabled: bool = False
+    min_load_w_override: int = 150  # Watts
+
     # Economics
     e_price: float = 27.0  # ct/kWh
     e_inc: float = 3.0  # % per year
@@ -144,7 +154,6 @@ class ConfigDefaults:
 
 # Singleton instance for easy access
 DEFAULTS = ConfigDefaults()
-
 
 # ─── Session State Key Mappings ────────────────────────────────────────────────
 # Maps session state keys to their default values from ConfigDefaults
@@ -175,6 +184,10 @@ SESSION_STATE_DEFAULTS: dict[str, Any] = {
     "cfg_max_soc_s": DEFAULTS.max_soc_summer,
     "cfg_min_soc_w": DEFAULTS.min_soc_winter,
     "cfg_max_soc_w": DEFAULTS.max_soc_winter,
+    "cfg_discharge_strategy": DEFAULTS.discharge_strategy,
+    "cfg_discharge_base_load_w": DEFAULTS.discharge_base_load_w,
+    "cfg_min_load_w_override_enabled": DEFAULTS.min_load_w_override_enabled,
+    "cfg_min_load_w_override": DEFAULTS.min_load_w_override,
     "cfg_e_price": DEFAULTS.e_price,
     "cfg_e_inc": DEFAULTS.e_inc,
     "cfg_feed_in_tariff": DEFAULTS.feed_in_tariff,
@@ -202,6 +215,10 @@ LAZY_INIT_KEYS: frozenset[str] = frozenset({
     "cfg_inverter_limit_w",
     # Behind cfg_dc_coupled == "AC-gekoppelt"
     "cfg_batt_inverter_preset",
+    # Behind cfg_discharge_strategy == "base_load"
+    "cfg_discharge_base_load_w",
+    # Behind cfg_min_load_w_override_enabled toggle
+    "cfg_min_load_w_override",
 })
 
 PERSISTED_KEYS: list[str] = [
@@ -213,6 +230,8 @@ PERSISTED_KEYS: list[str] = [
     "cfg_base_cost", "cfg_dc_coupled", "cfg_inverter_efficiency_preset",
     "cfg_batt_loss", "cfg_batt_inverter_preset",
     "cfg_min_soc_s", "cfg_max_soc_s", "cfg_min_soc_w", "cfg_max_soc_w",
+    "cfg_discharge_strategy", "cfg_discharge_base_load_w",
+    "cfg_min_load_w_override_enabled", "cfg_min_load_w_override",
     "cfg_e_price", "cfg_e_inc", "cfg_feed_in_tariff", "cfg_etf_ret",
     "cfg_reinvest_savings", "cfg_years",
 ]
@@ -227,11 +246,11 @@ class ValidationLimits:
     lat_max: float = 90.0
     lon_min: float = -180.0
     lon_max: float = 180.0
-    
+
     # Consumption
     annual_kwh_min: int = 100
     annual_kwh_max: int = 100_000
-    
+
     # PV System
     year_min: int = 2005
     year_max: int = 2023
@@ -241,13 +260,13 @@ class ValidationLimits:
     inverter_eff_max: int = 100
     inverter_limit_w_min: int = 100
     inverter_limit_w_max: int = 100_000
-    
+
     # Storage
     batt_loss_min: int = 0
     batt_loss_max: int = 30
     soc_min: int = 0
     soc_max: int = 100
-    
+
     # Economics
     e_price_min: float = 1.0  # ct/kWh
     e_price_max: float = 100.0  # ct/kWh
@@ -268,29 +287,29 @@ class ColorScheme:
     """Color definitions for charts and styling."""
     # Status colors
     positive: str = "#4caf50"  # Green
-    warning: str = "#ff9800"   # Orange
+    warning: str = "#ff9800"  # Orange
     negative: str = "#e53935"  # Red
-    
+
     # Chart colors – monthly energy balance
-    direct_pv: str = "#ff9800"    # Orange
-    battery: str = "#4db68a"      # Teal
+    direct_pv: str = "#ff9800"  # Orange
+    battery: str = "#4db68a"  # Teal
     grid_import: str = "#488fc2"  # Blue
-    feed_in: str = "#a280db"      # Purple
+    feed_in: str = "#a280db"  # Purple
     consumption_line: str = "#78909c"  # Gray
-    
+
     # Chart colors – weekly SoC comparison
-    soc_hue: int = 210       # Blue hue for SoC lines
+    soc_hue: int = 210  # Blue hue for SoC lines
     soc_saturation: int = 70
-    soc_lightness_light: int = 75   # Lightest (smallest storage)
-    soc_lightness_dark: int = 30    # Darkest (largest storage)
-    soc_pv_area: str = "#ff9800"    # PV area background (same as direct_pv)
+    soc_lightness_light: int = 75  # Lightest (smallest storage)
+    soc_lightness_dark: int = 30  # Darkest (largest storage)
+    soc_pv_area: str = "#ff9800"  # PV area background (same as direct_pv)
     soc_consumption_area: str = "#aaaaaa"  # Consumption area background
     soc_axis_title: str = "#999999"  # Secondary axis title color
     soc_day_boundary: str = "#cccccc"  # Day boundary vertical lines
-    
+
     # Chart colors – general
     zero_line: str = "gray"  # Zero reference line
-    
+
     # Thresholds for coloring
     autarky_good: float = 50.0
     autarky_medium: float = 30.0
@@ -300,14 +319,14 @@ class ColorScheme:
     yield_medium: float = 8.0
     amortization_good: float = 5.0
     amortization_medium: float = 10.0
-    
+
     # Full cycles thresholds (per year)
     # < 150: Low utilization (battery likely oversized)
     # 150-300: Optimal range (good balance, ~0.4-0.8 cycles/day)
     # > 300: High utilization (faster aging, rare in practice)
     cycles_low: float = 150.0
     cycles_high: float = 300.0
-    
+
     def soc_color_scale(self, num_scenarios: int) -> list[str]:
         """Generate blue color scale for SoC storage scenarios (light to dark)."""
         spread = self.soc_lightness_light - self.soc_lightness_dark

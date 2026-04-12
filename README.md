@@ -35,6 +35,8 @@ realistische Lastprofile.
 
 * 🔋 Speicher-Vergleichsszenarien – Direkter Vergleich verschiedener Kapazitäten von "Ohne Speicher" bis hin zu mehreren
   Batterie-Optionen.
+* ⚡ Entladestrategien – Drei Modi: Nulleinspeisung (Smart Meter), Grundlastdeckung (konstante Abgabe) oder
+  Zeitfenster (stundenweise Steuerung).
 * 📈 PV vs. ETF-Rendite – Langfristiger Vergleich der kumulierten Rendite inklusive optionaler Reinvestition der
   Ersparnis.
 * 🪙 Einspeisevergütung – Optionale Berücksichtigung aktueller Vergütungssätze in der Amortisationsrechnung.
@@ -44,18 +46,39 @@ realistische Lastprofile.
 
 Die Konfiguration erfolgt über die **Seitenleiste** in sieben aufklappbaren Abschnitten:
 
-| Abschnitt                     | Inhalt                                                                         |
-|-------------------------------|--------------------------------------------------------------------------------|
-| 📍 **Standort**               | Ort suchen oder Koordinaten manuell eingeben                                   |
-| 💡 **Verbrauch**              | Jahresverbrauch, Lastprofil, Lastverschiebung, periodische Zusatzlast          |
-| ☀️ **PV-Module**              | Module (Leistung, Ausrichtung, Neigung), Systemkosten                          |
-| ⚡ **PV-Konfiguration**        | PVGIS-Datenjahr, Systemverluste, WR-Wirkungsgrad, Wechselrichter-Limit         |
-| 🔋 **Speicher-Optionen**      | Ausbaustufen (Kapazität, Aufpreis)                                             |
-| 🪫 **Speicher-Konfiguration** | DC/AC-Kopplung, Batterie-WR, Lade-/Entladeverluste, SoC-Grenzen                |
-| 💰 **Preise & Vergleich**     | Strompreis, Preissteigerung, Einspeisevergütung, ETF-Rendite, Analyse-Horizont |
+| Abschnitt                     | Inhalt                                                                                          |
+|-------------------------------|-------------------------------------------------------------------------------------------------|
+| 📍 **Standort**               | Ort suchen oder Koordinaten manuell eingeben                                                    |
+| 💡 **Verbrauch**              | Jahresverbrauch, Lastprofil, Lastverschiebung, periodische Zusatzlast, Grundlast-Überschreibung |
+| ☀️ **PV-Module**              | Module (Leistung, Ausrichtung, Neigung), Systemkosten                                           |
+| ⚡ **PV-Konfiguration**        | PVGIS-Datenjahr, Systemverluste, WR-Wirkungsgrad, Wechselrichter-Limit                          |
+| 🔋 **Speicher-Optionen**      | Ausbaustufen (Kapazität, Aufpreis)                                                              |
+| 🪫 **Speicher-Konfiguration** | DC/AC-Kopplung, Batterie-WR, Lade-/Entladeverluste, SoC-Grenzen, Entladestrategie               |
+| 💰 **Preise & Vergleich**     | Strompreis, Preissteigerung, Einspeisevergütung, ETF-Rendite, Analyse-Horizont                  |
 
 Die Abschnitte **PV-Module** und **Speicher-Optionen** enthalten die häufig angepassten Einstellungen,
 während **PV-Konfiguration** und **Speicher-Konfiguration** die technischen Details bündeln.
+
+### Entladestrategien
+
+Die Entladestrategie bestimmt, wie die Batterie ihren Strom abgibt:
+
+| Strategie            | Beschreibung                                                                                 | Voraussetzung            |
+|----------------------|----------------------------------------------------------------------------------------------|--------------------------|
+| **Nulleinspeisung**  | Batterie folgt dem aktuellen Verbrauch in Echtzeit – höchster Eigenverbrauch                 | Smart Meter erforderlich |
+| **Grundlastdeckung** | Batterie gibt konstant z.B. 200W ab – einfachste Steuerung                                   | Keine                    |
+| **Zeitfenster**      | Batterie gibt je nach Tageszeit unterschiedliche Leistung ab (z.B. 300W abends, 100W nachts) | Keine                    |
+
+**Nulleinspeisung** ist die optimale Strategie bei Smart-Meter-Anbindung. Die Batterie trackt den Verbrauch und
+vermeidet Einspeisung. **Grundlastdeckung** und **Zeitfenster** sind für Systeme ohne Smart Meter geeignet – der
+konstante Output kann den schwankenden Verbrauch nicht perfekt treffen, was zu etwas mehr Netzbezug und Einspeisung
+führt.
+
+Für eine korrekte Simulation wird insbesondere bei **Grundlastdeckung** und **Zeitfenster** ein realistischer
+Wert für die Grundlast des Haushalts (Kühlschrank, Router, Standby-Geräte) benötigt. Dieser wird standardmäßig von
+der App auf Basis des gewählten Lastprofils geschätzt, kann aber auch im Abschnitt **Verbrauch** manuell überschrieben
+werden. Ein höherer Grundlast-Wert erhöht den simulierten Eigenverbrauch, da die konstante Last zuverlässiger von PV
+oder Batterie gedeckt werden kann.
 
 Nach Eingabe von **Standort** und **Jahresverbrauch** startet die Analyse automatisch.
 
@@ -99,13 +122,28 @@ Verbrauch innerhalb der Stunde erheblich – zeitweise deutlich unter und zeitwe
 Balkonkraftwerken mit niedrigem Wechselrichter-Limit (z. B. 800 W) führt das zu spürbaren Abweichungen.
 
 Um dies zu korrigieren, wird für jede Simulationsstunde der durchschnittliche Verbrauch in eine
-**Wahrscheinlichkeitsdichtefunktion** (PDF) der momentanen Leistungsaufnahme überführt (50-W-Bins, 0–4.950 W). Für jedes
+**Wahrscheinlichkeitsdichtefunktion** (PDF) der momentanen Leistungsaufnahme überführt (25-W-Bins). Für jedes
 Leistungsintervall wird der Anteil der PV-Erzeugung berechnet, der die momentane Last decken kann. Die gewichtete Summe
 über alle Intervalle ergibt den realistischen Direkt-PV-Anteil. Dadurch können innerhalb einer Stunde sowohl
 Überschuss (Einspeisung / Batterieladung) als auch Defizit (Netzbezug / Batterieentladung) gleichzeitig auftreten.
 
-Die vorberechneten Verteilungen (0–3.450 W) stammen aus gemessenen Minutenlastprofilen von 38 deutschen
-Einfamilienhäusern. Für höhere Lasten wird eine synthetische bimodale Gaußverteilung erzeugt.
+#### Zweischicht-Modell mit Grundlast
+
+Die Haushaltslast wird in zwei Schichten zerlegt:
+
+1. **Grundlast** (konstant) – Always-On-Geräte wie Kühlschrank, Router, Standby. Diese Last ist dauerhaft vorhanden
+   und wird bei ausreichender PV- oder Batterieleistung vollständig gedeckt.
+2. **Variable Last** (schwankend) – Alle übrigen Verbraucher. Auf diesen Anteil wird die statistische Regression
+   angewendet.
+
+Die vorberechneten Verteilungen stammen aus gemessenen Minutenlastprofilen von 38 deutschen Einfamilienhäusern
+(Schlemminger et al. 2022). Um Verzerrungen durch unterschiedliche Grundlasten zwischen Haushalten zu vermeiden, wurde
+pro Haushalt die Grundlast (1%-Perzentil) ermittelt und abgezogen. Die resultierende Verteilung beschreibt nur die
+Variabilität oberhalb der Grundlast.
+
+Bei der Anwendung wird die Grundlast des Nutzers (automatisch berechnet oder manuell überschrieben) als Offset addiert.
+Dadurch ergibt sich eine präzisere Eigenverbrauchsberechnung – insbesondere bei niedrigen PV-/Batterie-Outputs nahe
+der Grundlast. Für Lasten über 3.450 W wird eine synthetische bimodale Gaußverteilung erzeugt.
 
 ## Wirtschaftlichkeitsrechnung
 
@@ -128,7 +166,6 @@ automatisch wiederhergestellt.
 | [Nominatim](https://nominatim.openstreetmap.org/)                                                         | Geocoding (Ortssuche → Koordinaten)         | © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, [ODbL](https://opendatacommons.org/licenses/odbl/) |
 | [BDEW H0-Profil](https://www.bdew.de/energie/standardlastprofile-strom/)                                  | Standard-Lastprofil für Haushalte           | Bundesverband der Energie- und Wasserwirtschaft (BDEW)                                                                      |
 | [CEC Solar Equipment Lists](https://www.energy.ca.gov/programs-and-topics/programs/solar-equipment-lists) | Lastabhängige Wirkungsgradkurven            | California Energy Commission (CEC)                                                                                          |
-| [PVTools](https://github.com/nick81nrw/PVTools) (MIT License)                                             | Sub-stündliche Lastregressionsverteilungen  | nick81nrw                                                                                                                   |
 | [Schlemminger et al. 2022](https://doi.org/10.1038/s41597-022-01156-1)                                    | Gemessene Minutenlastprofile (38 Haushalte) | ISFH / *Scientific Data*                                                                                                    |
 
 Das BDEW H0-Standardlastprofil stammt aus der offiziellen Veröffentlichung "Repräsentative VDEW-Lastprofile" (1999) des
@@ -149,9 +186,10 @@ Zusätzlich können Experten eigene Wirkungsgradkurven eingeben.
 
 Die sub-stündlichen Lastregressionsverteilungen basieren auf dem Datensatz von Schlemminger, M., Ohrdes, T., Schneider,
 E. et al.: *"Dataset on electrical single-family house and heat pump load profiles in Germany."*, Sci Data 9, 56 (
-2022), [DOI: 10.1038/s41597-022-01156-1](https://doi.org/10.1038/s41597-022-01156-1). Die Aufbereitung als
-Wahrscheinlichkeitsdichtefunktionen in 50-W-Bins wurde vom Projekt [PVTools](https://github.com/nick81nrw/PVTools) (MIT
-License, Copyright © 2023 nick81nrw) durchgeführt und als `regression.json` veröffentlicht.
+2022), [DOI: 10.1038/s41597-022-01156-1](https://doi.org/10.1038/s41597-022-01156-1). Die Minutendaten von
+38 deutschen Haushalten wurden grundlast-bereinigt aufbereitet: Pro Haushalt wird die Grundlast (1%-Perzentil) ermittelt
+und abgezogen. Die resultierende Verteilung beschreibt nur die Variabilität oberhalb der Grundlast. Bei der Anwendung
+wird die Grundlast des Nutzers als Offset addiert, was eine präzisere Eigenverbrauchsberechnung ermöglicht.
 
 ## Entwicklung
 

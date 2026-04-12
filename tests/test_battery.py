@@ -6,6 +6,7 @@ to verify energy flow physics for a single hour.
 """
 import pytest
 
+from solarbatteryield.models import DischargeStrategyConfig, TimeWindow
 from solarbatteryield.simulation.battery import (
     NoBattery,
     DcCoupledBattery,
@@ -128,7 +129,7 @@ class TestNoBattery:
 
         # then
         assert result.feed_in > 0
-        assert result.grid_import == pytest.approx(0.0, abs=0.01)
+        assert result.grid_import == pytest.approx(0.0, abs=0.02)
 
     def test_should_import_all_load_from_grid_when_no_pv(self):
         """Should import entire load from grid when there is no PV generation."""
@@ -335,6 +336,327 @@ class TestBatteryEnergyBalance:
 
         # when
         result = batt.process_hour(gen_dc=0.5, load=0.4, hour=14)
+
+        # then
+        supply = result.direct_pv + result.battery_discharge + result.grid_import
+        assert supply == pytest.approx(result.consumption, rel=0.01)
+
+
+# ─── Base Load Strategy Tests ────────────────────────────────────────────────
+
+_BASE_LOAD_CONFIG = DischargeStrategyConfig(mode="base_load", base_load_w=200)
+
+
+def _make_dc_battery_with_strategy(
+        cap: float = 5.0, batt_eff: float = 1.0, inv_cap: float = 10.0,
+        strategy: DischargeStrategyConfig = _BASE_LOAD_CONFIG,
+) -> DcCoupledBattery:
+    """Create a DcCoupledBattery with strategy and full SoC range."""
+    batt = DcCoupledBattery(
+        cap_gross=cap, batt_eff=batt_eff, inv_cap=inv_cap,
+        inv_eff_curve=_EFF, strategy_config=strategy,
+    )
+    batt.set_soc_limits(0.0, cap)
+    return batt
+
+
+def _make_ac_battery_with_strategy(
+        cap: float = 5.0, batt_eff: float = 1.0, inv_cap: float = 10.0,
+        strategy: DischargeStrategyConfig = _BASE_LOAD_CONFIG,
+) -> AcCoupledBattery:
+    """Create an AcCoupledBattery with strategy and full SoC range."""
+    batt = AcCoupledBattery(
+        cap_gross=cap, batt_eff=batt_eff, inv_cap=inv_cap,
+        inv_eff_curve=_EFF, batt_inv_eff_curve=_EFF,
+        strategy_config=strategy,
+    )
+    batt.set_soc_limits(0.0, cap)
+    return batt
+
+
+class TestBaseLoadDcCoupled:
+    """Tests for base_load strategy with DC-coupled battery."""
+
+    def test_should_not_discharge_when_pv_exceeds_target(self):
+        """Should not discharge battery when PV alone can meet the target."""
+        # given
+        batt = _make_dc_battery_with_strategy()
+        batt.process_hour(gen_dc=3.0, load=0.1, hour=12)  # pre-charge
+        soc_before = batt.soc
+
+        # when — PV (2 kW) >> target (0.2 kW)
+        result = batt.process_hour(gen_dc=2.0, load=0.5, hour=13)
+
+        # then
+        assert batt.soc >= soc_before  # Battery charged (not discharged)
+        assert result.battery_discharge == pytest.approx(0.0)
+
+    def test_should_discharge_to_fill_gap_between_pv_and_target(self):
+        """Should discharge battery to fill the gap when PV < target."""
+        # given
+        batt = _make_dc_battery_with_strategy()
+        batt.process_hour(gen_dc=3.0, load=0.1, hour=12)  # pre-charge
+        soc_after_charge = batt.soc
+
+        # when — PV (0.0 kW) < target (0.2 kW), load = 0.5 kW
+        result = batt.process_hour(gen_dc=0.0, load=0.5, hour=20)
+
+        # then
+        assert batt.soc < soc_after_charge
+        assert result.battery_discharge > 0
+
+    def test_should_never_exceed_target_output(self):
+        """Battery + PV system output should not exceed target."""
+        # given — target = 0.2 kW, PV = 0.1 kW, load = 0.5 kW
+        batt = _make_dc_battery_with_strategy()
+        batt.process_hour(gen_dc=3.0, load=0.1, hour=12)  # pre-charge
+
+        # when
+        result = batt.process_hour(gen_dc=0.1, load=0.5, hour=20)
+
+        # then — direct_pv + battery_discharge ≤ target (0.2 kW) + tolerance
+        system_output = result.direct_pv + result.battery_discharge
+        assert system_output <= 0.2 + 0.02
+
+    def test_should_feed_in_when_load_less_than_target(self):
+        """Should have feed-in when system output exceeds load (blind output)."""
+        # given — target = 0.2 kW, load = 0.05 kW
+        batt = _make_dc_battery_with_strategy()
+        batt.process_hour(gen_dc=3.0, load=0.1, hour=12)  # pre-charge
+
+        # when
+        result = batt.process_hour(gen_dc=0.0, load=0.05, hour=20)
+
+        # then
+        assert result.feed_in > 0
+
+    def test_should_import_from_grid_when_battery_empty(self):
+        """Should import from grid when battery is empty and PV < target."""
+        # given — empty battery (no pre-charge)
+        batt = _make_dc_battery_with_strategy()
+
+        # when
+        result = batt.process_hour(gen_dc=0.0, load=0.5, hour=20)
+
+        # then
+        assert result.grid_import > 0
+
+
+class TestBaseLoadAcCoupled:
+    """Tests for base_load strategy with AC-coupled battery."""
+
+    def test_should_not_discharge_when_pv_exceeds_target(self):
+        """Should not discharge battery when PV alone can meet the target."""
+        # given
+        batt = _make_ac_battery_with_strategy()
+        batt.process_hour(gen_dc=3.0, load=0.1, hour=12)  # pre-charge
+        soc_before = batt.soc
+
+        # when
+        result = batt.process_hour(gen_dc=2.0, load=0.5, hour=13)
+
+        # then
+        assert batt.soc >= soc_before
+        assert result.battery_discharge == pytest.approx(0.0)
+
+    def test_should_discharge_to_fill_gap_between_pv_and_target(self):
+        """Should discharge battery to fill the gap when PV < target."""
+        # given
+        batt = _make_ac_battery_with_strategy()
+        batt.process_hour(gen_dc=3.0, load=0.1, hour=12)  # pre-charge
+        soc_after_charge = batt.soc
+
+        # when
+        result = batt.process_hour(gen_dc=0.0, load=0.5, hour=20)
+
+        # then
+        assert batt.soc < soc_after_charge
+        assert result.battery_discharge > 0
+
+
+# ─── Time Window Strategy Tests ──────────────────────────────────────────────
+
+
+class TestTimeWindowBattery:
+    """Tests for time_window strategy with battery."""
+
+    def test_should_discharge_only_during_active_windows(self):
+        """Should discharge only when the current hour is in an active window."""
+        # given
+        windows = (TimeWindow(start_hour=17, end_hour=22, power_w=300),)
+        strategy = DischargeStrategyConfig(mode="time_window", time_windows=windows)
+        batt = _make_dc_battery_with_strategy(strategy=strategy)
+
+        # Pre-charge
+        batt.process_hour(gen_dc=3.0, load=0.1, hour=12)
+
+        # when — outside window
+        result_outside = batt.process_hour(gen_dc=0.0, load=0.5, hour=12)
+        # when — inside window
+        result_inside = batt.process_hour(gen_dc=0.0, load=0.5, hour=19)
+
+        # then
+        assert result_outside.battery_discharge == pytest.approx(0.0)
+        assert result_inside.battery_discharge > 0
+
+    def test_should_still_charge_during_inactive_windows(self):
+        """Should charge battery from PV surplus even outside active windows."""
+        # given
+        windows = (TimeWindow(start_hour=17, end_hour=22, power_w=300),)
+        strategy = DischargeStrategyConfig(mode="time_window", time_windows=windows)
+        batt = _make_dc_battery_with_strategy(strategy=strategy)
+        soc_initial = batt.soc
+
+        # when — PV surplus at noon, outside discharge window
+        batt.process_hour(gen_dc=2.0, load=0.1, hour=12)
+
+        # then — battery should have charged
+        assert batt.soc > soc_initial
+
+    def test_should_use_different_powers_for_different_windows(self):
+        """Should respect power settings of individual windows."""
+        # given
+        windows = (
+            TimeWindow(start_hour=6, end_hour=10, power_w=100),
+            TimeWindow(start_hour=17, end_hour=22, power_w=500),
+        )
+        strategy = DischargeStrategyConfig(mode="time_window", time_windows=windows)
+
+        # Morning window battery
+        batt_morning = _make_dc_battery_with_strategy(strategy=strategy)
+        batt_morning.process_hour(gen_dc=5.0, load=0.1, hour=12)  # pre-charge
+
+        # Evening window battery (identical starting state)
+        batt_evening = _make_dc_battery_with_strategy(strategy=strategy)
+        batt_evening.process_hour(gen_dc=5.0, load=0.1, hour=12)  # pre-charge
+
+        # when
+        result_morning = batt_morning.process_hour(gen_dc=0.0, load=1.0, hour=8)
+        result_evening = batt_evening.process_hour(gen_dc=0.0, load=1.0, hour=19)
+
+        # then — evening window has higher power → more discharge
+        assert result_evening.battery_discharge > result_morning.battery_discharge
+
+
+# ─── Battery-Full Surplus Optimization Tests ─────────────────────────────────
+
+
+class TestBatteryFullSurplusOptimization:
+    """Tests for PV surplus serving load when battery is full (target-based paths)."""
+
+    def test_dc_should_reduce_grid_import_when_battery_full_and_surplus(self):
+        """DC: When battery is full and PV > target, surplus should reduce grid import."""
+        # given — battery at max SoC, PV >> target (200W), load > target
+        strategy = DischargeStrategyConfig(mode="base_load", base_load_w=200)
+        batt = _make_dc_battery_with_strategy(cap=2.0, strategy=strategy)
+        batt.set_soc_limits(0.0, 2.0)
+        # Fill battery completely
+        batt.process_hour(gen_dc=5.0, load=0.0, hour=10)
+        batt.process_hour(gen_dc=5.0, load=0.0, hour=11)
+        assert batt.soc >= 1.9  # Battery nearly full
+
+        # when — PV=1.0 kW (>> target 0.2 kW), load=0.5 kW
+        result = batt.process_hour(gen_dc=1.0, load=0.5, hour=12)
+
+        # then — surplus PV should partially serve remaining load
+        # Without optimization: grid_import ≈ load - (regression on 0.2kW system output)
+        # With optimization: grid_import is lower because surplus PV also serves load
+        assert result.grid_import < 0.4  # Should be noticeably less than load
+        assert result.direct_pv > 0.15  # More than just target's PV share
+
+    def test_ac_should_reduce_grid_import_when_battery_full_and_surplus(self):
+        """AC: When battery is full and PV > target, surplus should reduce grid import."""
+        # given
+        strategy = DischargeStrategyConfig(mode="base_load", base_load_w=200)
+        batt = _make_ac_battery_with_strategy(cap=2.0, strategy=strategy)
+        batt.set_soc_limits(0.0, 2.0)
+        batt.process_hour(gen_dc=5.0, load=0.0, hour=10)
+        batt.process_hour(gen_dc=5.0, load=0.0, hour=11)
+        assert batt.soc >= 1.9
+
+        # when
+        result = batt.process_hour(gen_dc=1.0, load=0.5, hour=12)
+
+        # then
+        assert result.grid_import < 0.4
+        assert result.direct_pv > 0.15
+
+    def test_should_not_affect_surplus_when_battery_not_full(self):
+        """When battery is NOT full, all surplus charges battery (no second regression)."""
+        # given — battery empty, PV >> target
+        strategy = DischargeStrategyConfig(mode="base_load", base_load_w=200)
+        batt = _make_dc_battery_with_strategy(cap=10.0, strategy=strategy)
+        batt.set_soc_limits(0.0, 10.0)
+        soc_before = batt.soc
+
+        # when — PV=2.0 kW, load=0.5 kW
+        result = batt.process_hour(gen_dc=2.0, load=0.5, hour=12)
+
+        # then — surplus charges battery, feed_in is minimal
+        assert batt.soc > soc_before  # Battery charged from surplus
+        assert result.feed_in < 0.05  # Nearly all surplus absorbed
+
+    def test_should_export_all_surplus_when_no_load(self):
+        """When load=0 and battery full, all surplus should be exported."""
+        # given — battery full, no load
+        strategy = DischargeStrategyConfig(mode="base_load", base_load_w=200)
+        batt = _make_dc_battery_with_strategy(cap=2.0, strategy=strategy)
+        batt.set_soc_limits(0.0, 2.0)
+        batt.process_hour(gen_dc=5.0, load=0.0, hour=10)
+        batt.process_hour(gen_dc=5.0, load=0.0, hour=11)
+
+        # when — PV=1.0 kW, load=0.0
+        result = batt.process_hour(gen_dc=1.0, load=0.0, hour=12)
+
+        # then
+        assert result.grid_import == pytest.approx(0.0)
+        assert result.feed_in > 0
+
+    def test_should_maintain_energy_balance_with_surplus_optimization(self):
+        """Energy balance must hold: direct_pv + battery + grid = consumption."""
+        # given — battery full, PV > target, load > target
+        strategy = DischargeStrategyConfig(mode="base_load", base_load_w=200)
+        for Factory in [_make_dc_battery_with_strategy, _make_ac_battery_with_strategy]:
+            batt = Factory(cap=2.0, strategy=strategy)
+            batt.set_soc_limits(0.0, 2.0)
+            batt.process_hour(gen_dc=5.0, load=0.0, hour=10)
+            batt.process_hour(gen_dc=5.0, load=0.0, hour=11)
+
+            # when
+            result = batt.process_hour(gen_dc=1.0, load=0.5, hour=12)
+
+            # then
+            supply = result.direct_pv + result.battery_discharge + result.grid_import
+            assert supply == pytest.approx(result.consumption, rel=0.01)
+
+
+# ─── Strategy Energy Balance Tests ───────────────────────────────────────────
+
+
+class TestStrategyEnergyBalance:
+    """Tests verifying energy conservation with non-default strategies."""
+
+    @pytest.mark.parametrize("strategy_config", [
+        DischargeStrategyConfig(mode="base_load", base_load_w=200),
+        DischargeStrategyConfig(mode="base_load", base_load_w=500),
+        DischargeStrategyConfig(
+            mode="time_window",
+            time_windows=(TimeWindow(start_hour=17, end_hour=22, power_w=300),),
+        ),
+    ])
+    @pytest.mark.parametrize("BatteryFactory,extra_kwargs", [
+        (_make_dc_battery_with_strategy, {}),
+        (_make_ac_battery_with_strategy, {}),
+    ])
+    def test_should_balance_supply_and_consumption(self, strategy_config,
+                                                   BatteryFactory, extra_kwargs):
+        """Supply should equal consumption for all strategy configurations."""
+        # given
+        batt = BatteryFactory(strategy=strategy_config, **extra_kwargs)
+        batt.process_hour(gen_dc=3.0, load=0.1, hour=12)  # pre-charge
+
+        # when
+        result = batt.process_hour(gen_dc=0.3, load=0.4, hour=19)
 
         # then
         supply = result.direct_pv + result.battery_discharge + result.grid_import

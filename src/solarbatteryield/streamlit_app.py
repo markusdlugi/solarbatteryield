@@ -14,7 +14,7 @@ from solarbatteryield.api import get_pvgis_hourly, PVGISError, APIError
 from solarbatteryield.models import (
     SimulationConfig, LocationConfig, ConsumptionConfig, PVSystemConfig,
     StorageConfig, EconomicsConfig, PVModule, StorageOption,
-    ScenarioResult, AnalysisResult
+    ScenarioResult, AnalysisResult, TimeWindow,
 )
 from solarbatteryield.simulation import simulate
 from solarbatteryield.state import init_session_state, sv
@@ -127,6 +127,11 @@ def get_config() -> SimulationConfig:
             periodic_enabled=periodic_enabled,
             periodic_delta=st.session_state._periodic_delta if periodic_enabled else [0] * 24,
             periodic_days=sv("cfg_periodic_days"),
+            min_load_w_override=(
+                float(sv("cfg_min_load_w_override"))
+                if sv("cfg_min_load_w_override_enabled")
+                else None
+            ),
         ),
         pv_system=PVSystemConfig(
             data_year=sv("cfg_year"),
@@ -148,6 +153,16 @@ def get_config() -> SimulationConfig:
             min_soc_winter=sv("cfg_min_soc_w"),
             max_soc_winter=sv("cfg_max_soc_w"),
             options=storage_options,
+            discharge_strategy=sv("cfg_discharge_strategy"),
+            discharge_base_load_w=sv("cfg_discharge_base_load_w"),
+            discharge_time_windows=[
+                TimeWindow(
+                    start_hour=w["start"],
+                    end_hour=w["end"],
+                    power_w=w["power_w"],
+                )
+                for w in st.session_state.get("_discharge_time_windows", [])
+            ],
         ),
         economics=EconomicsConfig(
             e_price=sv("cfg_e_price") / 100,  # Convert ct/kWh to EUR/kWh
@@ -191,7 +206,14 @@ def run_simulations(config: SimulationConfig, pv_total: np.ndarray,
     # Get simulation input from config
     sim_params = config.to_simulation_input()
 
-    results = AnalysisResult(pv_generation_total=pv_gen_total)
+    # Determine effective floor for AnalysisResult (override or auto)
+    from solarbatteryield.simulation.load import compute_min_load_w
+    if sim_params.consumption.min_load_w_override is not None:
+        effective_min_load_w = float(sim_params.consumption.min_load_w_override)
+    else:
+        effective_min_load_w = compute_min_load_w(sim_params)
+
+    results = AnalysisResult(pv_generation_total=pv_gen_total, min_load_w=effective_min_load_w)
 
     for name, cap, cost in scenarios:
         sim_result = simulate(pv_total, cap, sim_params)

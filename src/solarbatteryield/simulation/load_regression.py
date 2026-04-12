@@ -3,10 +3,16 @@ Sub-hourly load regression for improved self-consumption estimation.
 
 Instead of comparing a single average load value against PV generation per hour,
 this module distributes the hourly load into a probability density function of
-instantaneous power levels (in 50 W bins). This captures the real-world variation
+instantaneous power levels (in 25 W bins). This captures the real-world variation
 of household electrical load within each hour, which is critical for accurate
 self-consumption estimates — especially for small balcony solar systems where
 the inverter limit is close to the average load.
+
+The regression database is **base-load-free**: per-household base loads (P1
+percentile) were subtracted before computing the distributions, so the bins
+describe only the *variable* load above the always-on floor.  At runtime the
+known base load of the user's household is handled as a separate, deterministic
+layer (see ``get_direct_pv_fraction``).
 
 Example:
     With an average hourly load of 300 W and PV generation of 400 W, the naive
@@ -16,17 +22,17 @@ Example:
     distribution and computes a more realistic direct-PV fraction.
 
 Data source:
-    The pre-computed probability distributions (0–3450 W in 50 W bins) are derived
-    from measured single-family house electrical load profiles of 38 households in
+    The pre-computed probability distributions (0–3450 W in 25 W bins) are derived
+    from measured single-family house electrical load profiles of 28 households in
     Germany, published in:
 
         Schlemminger, M., Ohrdes, T., Schneider, E. et al.
         "Dataset on electrical single-family house and heat pump load profiles in Germany."
         Sci Data 9, 56 (2022). https://doi.org/10.1038/s41597-022-01156-1
 
-    The regression database was processed and published by PVTools
-    (MIT License, Copyright (c) 2023 nick81nrw):
-        https://github.com/nick81nrw/PVTools
+    The original PVTools regression database (MIT License, Copyright (c) 2023
+    nick81nrw, https://github.com/nick81nrw/PVTools) was re-derived from the
+    same raw data with base-load subtraction and 25 W bin resolution.
 
     For loads above the database range (>3450 W) a synthetic bimodal Gaussian
     distribution is generated, following the same approach as PVTools.
@@ -38,13 +44,11 @@ import math
 from functools import lru_cache
 from pathlib import Path
 
-
 # ─── Regression Database ───────────────────────────────────────────────────────
 _DB_PATH = Path(__file__).parent / "data" / "regression_db.json"
 
 # Pre-computed bin resolution in the database
-DB_RESOLUTION_W: int = 50
-
+DB_RESOLUTION_W: int = 25
 
 
 def _load_regression_db() -> dict[int, list[tuple[int, float]]]:
@@ -162,19 +166,25 @@ def _get_distribution(load_w: float) -> tuple[list[tuple[int, float]], int]:
     return list(distribution_tuple), resolution // 2
 
 
-def get_direct_pv_fraction(load_w: float, pv_w: float) -> float:
+def get_direct_pv_fraction(load_w: float, pv_w: float, min_load_w: float = 0.0) -> float:
     """
     Calculate the self-consumption fraction considering sub-hourly load variation.
 
-    Given an average hourly load and available PV power (both in watts), this
-    function returns the fraction of ``min(load, pv)`` that is actually directly
-    consumed by PV.  Values below 1.0 mean that some PV energy is *not*
-    self-consumed even though the hourly average would suggest otherwise — because
-    during low-load moments the PV exceeds the instantaneous demand.
+    Uses a two-layer model:
+
+    * **Layer 1 — Base load** (``min_load_w``): constant draw from always-on
+      devices (fridge, router, standby).  This portion is deterministic — when
+      PV/system output ≥ base load, it is **always** fully consumed.
+    * **Layer 2 — Variable load**: the remainder fluctuates within the hour.
+      The regression distribution (base-load-free) is applied here.
+
+    When ``min_load_w`` is 0 the function behaves identically to the original
+    single-layer formula (fully backwards compatible).
 
     Args:
-        load_w: Average hourly household load in watts.
-        pv_w:   Available PV power in watts (AC side, after inverter).
+        load_w:     Average hourly household load in watts.
+        pv_w:       Available PV / system power in watts (AC side).
+        min_load_w: Base-load floor in watts (default 0 = no floor).
 
     Returns:
         Fraction in [0.0, 1.0].  Multiply by ``min(load, pv)`` to obtain the
@@ -187,17 +197,30 @@ def get_direct_pv_fraction(load_w: float, pv_w: float) -> float:
     if multiplicator <= 0:
         return 0.0
 
-    distribution, power_delta = _get_distribution(load_w)
+    # Clamp floor to [0, load_w] for safety
+    floor = max(0.0, min(min_load_w, load_w))
 
-    # Weighted sum: for each instantaneous power level, compute the fraction of
-    # the multiplicator that PV can cover, weighted by the probability of that
-    # power level occurring within the hour.
-    fraction = 0.0
-    inv_mult = 1.0 / multiplicator
+    # ── Layer 1: Base load (deterministic, always consumed) ─────────
+    base_consumed = min(pv_w, floor, load_w)
+
+    pv_remaining = pv_w - base_consumed
+    load_remaining = load_w - base_consumed
+
+    if load_remaining <= 0 or pv_remaining <= 0:
+        # All PV went to base load, or all load is base load
+        return min(base_consumed / multiplicator, 1.0)
+
+    # ── Layer 2: Variable load (stochastic, regression) ─────────────
+    distribution, power_delta = _get_distribution(load_remaining)
+
+    fraction_var = 0.0
+    inv_mult_var = 1.0 / min(load_remaining, pv_remaining)
     for power, probability in distribution:
-        # Fraction covered at this power level
-        covered = min((power + power_delta) * inv_mult, 1.0)
-        fraction += covered * probability
+        covered = min((power + power_delta) * inv_mult_var, 1.0)
+        fraction_var += covered * probability
 
-    return min(fraction, 1.0)
+    fraction_var = min(fraction_var, 1.0)
+    direct_variable = fraction_var * min(load_remaining, pv_remaining)
 
+    total_direct = base_consumed + direct_variable
+    return min(total_direct / multiplicator, 1.0)

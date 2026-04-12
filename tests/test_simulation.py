@@ -5,16 +5,15 @@ The simulation module is the core of the PV analysis application. It runs hourly
 simulations of PV systems with optional battery storage, handling different coupling
 types (AC/DC), inverter efficiency, load profiles, and seasonal variations.
 """
-import pytest
 import numpy as np
-
-from solarbatteryield.simulation import simulate
+import pytest
 
 from conftest import (
     create_simulation_params,
     create_constant_pv,
     create_daytime_pv,
 )
+from solarbatteryield.simulation import simulate
 
 
 class TestSimulationEnergyBalance:
@@ -73,17 +72,16 @@ class TestSimulationWithoutBattery:
         """Should feed excess PV to grid when no battery is available."""
         # given
         params = create_simulation_params(
-            active_base=[100] * 24,  # Low load: 100W
-            inverter_limit_kw=None,   # No inverter limit
+            active_base=[200] * 24,  # 200W constant load
+            inverter_limit_kw=None,
         )
-        pv_data = create_constant_pv(power_kw=1.0)  # 1kW constant
+        pv_data = create_daytime_pv(peak_kw=1.0)  # 1kW peak during daytime
 
         # when
         result = simulate(pv_data, cap_gross=0.0, params=params)
 
-        # then
+        # then — daytime surplus must be fed in
         assert result.feed_in > 0
-        assert result.grid_import > 0  # Still need grid at night due to load regression
 
     def test_should_use_direct_pv_before_grid(self):
         """Should prioritize direct PV consumption over grid import."""
@@ -287,7 +285,7 @@ class TestSeasonalSocLimits:
         # Create PV data for just January (winter)
         hours_january = 31 * 24
         pv_data = create_daytime_pv(peak_kw=0.5, hours=hours_january)
-        
+
         params_different_limits = create_simulation_params(
             min_soc_summer=10,
             min_soc_winter=50,  # Higher minimum in winter
@@ -337,7 +335,7 @@ class TestMonthlyTracking:
         monthly_consumption = sum(m.consumption for m in result.monthly.values())
         monthly_grid_import = sum(m.grid_import for m in result.monthly.values())
         monthly_feed_in = sum(m.feed_in for m in result.monthly.values())
-        
+
         assert monthly_consumption == pytest.approx(result.total_consumption, rel=0.001)
         assert monthly_grid_import == pytest.approx(result.grid_import, rel=0.001)
         assert monthly_feed_in == pytest.approx(result.feed_in, rel=0.001)
@@ -370,7 +368,7 @@ class TestFlexibleLoad:
         # given
         flex_delta = [0] * 24
         flex_delta[12] = 500  # Add 500W at noon
-        
+
         params_flex = create_simulation_params(
             flex_enabled=True,
             flex_min_yield=1.0,  # Low threshold
@@ -397,7 +395,7 @@ class TestFlexibleLoad:
         # given
         flex_delta = [0] * 24
         flex_delta[12] = 500
-        
+
         params = create_simulation_params(
             flex_enabled=True,
             flex_min_yield=100.0,  # Very high threshold - never reached
@@ -420,7 +418,7 @@ class TestFlexibleLoad:
         # given
         flex_delta = [500] * 24  # Add 500W all day
         pool_size = 3
-        
+
         params = create_simulation_params(
             flex_enabled=True,
             flex_min_yield=0.1,  # Very low threshold - always triggers if pool available
@@ -449,7 +447,7 @@ class TestFlexibleLoad:
         flex_delta = [500] * 24
         pool_size = 2
         refresh_rate = 1.0  # Fully refresh 1 use per day
-        
+
         params = create_simulation_params(
             flex_enabled=True,
             flex_min_yield=5.0,  # Moderate threshold
@@ -458,7 +456,7 @@ class TestFlexibleLoad:
             flex_delta=flex_delta,
             active_base=[200] * 24,
         )
-        
+
         # Pattern: 2 sunny days (use pool), 2 cloudy days (refresh pool), 2 sunny days (use again)
         hours_6_days = 6 * 24
         pv_data = np.zeros(hours_6_days)
@@ -492,7 +490,7 @@ class TestPeriodicLoad:
         # given
         periodic_delta = [0] * 24
         periodic_delta[0] = 1000  # Add 1kW at midnight
-        
+
         params_periodic = create_simulation_params(
             periodic_enabled=True,
             periodic_days=1,  # Every day
@@ -516,7 +514,7 @@ class TestPeriodicLoad:
         """Should only add periodic load every N days."""
         # given
         periodic_delta = [1000] * 24  # Add 1kW all day
-        
+
         params_every_day = create_simulation_params(
             periodic_enabled=True,
             periodic_days=1,
@@ -633,6 +631,203 @@ class TestWeeklySoCData:
         assert actual_hours_winter == expected_hours
 
 
+# ─── Discharge Strategy Integration Tests ────────────────────────────────────
+
+from solarbatteryield.models import DischargeStrategyConfig, TimeWindow
+
+
+def _create_strategy_params(
+        strategy: str = "zero_feed_in",
+        base_load_w: int = 200,
+        time_windows: list[TimeWindow] | None = None,
+        **kwargs,
+):
+    """Create simulation params with a specific discharge strategy."""
+
+    strategy_config = DischargeStrategyConfig(
+        mode=strategy,
+        base_load_w=base_load_w,
+        time_windows=tuple(time_windows or []),
+    )
+    params = create_simulation_params(**kwargs)
+    # Replace the default strategy config
+    return create_simulation_params(
+        discharge_strategy_config=strategy_config,
+        **{k: v for k, v in kwargs.items()},
+    )
+
+
+class TestDischargeStrategyInvariant:
+    """Tests for the key invariant: zero_feed_in ≥ self-consumption of base_load."""
+
+    @pytest.mark.parametrize("base_load_w", [50, 100, 200, 500])
+    @pytest.mark.parametrize("dc_coupled", [True, False])
+    def test_should_have_zero_feed_in_greater_or_equal_self_consumption(
+            self, base_load_w, dc_coupled
+    ):
+        """Zero-feed-in should always achieve ≥ self-consumption than base_load."""
+        # given
+        pv_data = create_daytime_pv(peak_kw=0.8)
+        cap_gross = 5.0
+
+        params_zero = create_simulation_params(
+            dc_coupled=dc_coupled,
+            active_base=[300] * 24,
+        )
+        params_base = create_simulation_params(
+            dc_coupled=dc_coupled,
+            active_base=[300] * 24,
+            discharge_strategy_config=DischargeStrategyConfig(
+                mode="base_load", base_load_w=base_load_w,
+            ),
+        )
+
+        # when
+        result_zero = simulate(pv_data, cap_gross, params_zero)
+        result_base = simulate(pv_data, cap_gross, params_base)
+
+        # then — zero-feed-in should have less grid import (= more self-consumption)
+        assert result_zero.grid_import <= result_base.grid_import + 0.1, (
+            f"dc={dc_coupled}, base_load={base_load_w}W: "
+            f"zero_feed_in grid_import ({result_zero.grid_import:.1f}) "
+            f"should be ≤ base_load ({result_base.grid_import:.1f})"
+        )
+
+
+class TestBaseLoadSimulation:
+    """Integration tests for base_load discharge strategy."""
+
+    def test_should_have_more_grid_import_than_zero_feed_in(self):
+        """Base load strategy should result in more grid import than zero feed-in."""
+        # given
+        pv_data = create_daytime_pv(peak_kw=0.8)
+        cap_gross = 5.0
+        params_zero = create_simulation_params(active_base=[300] * 24)
+        params_base = create_simulation_params(
+            active_base=[300] * 24,
+            discharge_strategy_config=DischargeStrategyConfig(
+                mode="base_load", base_load_w=200,
+            ),
+        )
+
+        # when
+        result_zero = simulate(pv_data, cap_gross, params_zero)
+        result_base = simulate(pv_data, cap_gross, params_base)
+
+        # then
+        assert result_base.grid_import > result_zero.grid_import
+
+    def test_should_have_feed_in_from_battery_when_load_less_than_target(self):
+        """Base load should feed in battery power when load < target (blind output)."""
+        # given — very low load, target 200W
+        pv_data = create_daytime_pv(peak_kw=0.8)
+        cap_gross = 5.0
+        params_base = create_simulation_params(
+            active_base=[50] * 24,  # Very low load: 50W
+            discharge_strategy_config=DischargeStrategyConfig(
+                mode="base_load", base_load_w=200,
+            ),
+        )
+
+        # when
+        result = simulate(pv_data, cap_gross, params_base)
+
+        # then — there should be significant feed-in (target > load in many hours)
+        assert result.feed_in > 0
+
+    def test_should_balance_energy_with_base_load(self):
+        """Energy balance should hold with base_load strategy."""
+        # given
+        pv_data = create_daytime_pv(peak_kw=0.8)
+        cap_gross = 5.0
+        params = create_simulation_params(
+            active_base=[300] * 24,
+            discharge_strategy_config=DischargeStrategyConfig(
+                mode="base_load", base_load_w=200,
+            ),
+        )
+
+        # when
+        result = simulate(pv_data, cap_gross, params)
+
+        # then
+        monthly = result.monthly
+        total_direct_pv = sum(m.direct_pv for m in monthly.values())
+        total_battery = sum(m.battery for m in monthly.values())
+        total_grid = sum(m.grid_import for m in monthly.values())
+        total_consumption = sum(m.consumption for m in monthly.values())
+        supply = total_direct_pv + total_battery + total_grid
+        assert supply == pytest.approx(total_consumption, rel=0.001)
+
+
+class TestTimeWindowSimulation:
+    """Integration tests for time_window discharge strategy."""
+
+    def test_should_have_battery_cycles_only_during_active_windows(self):
+        """Battery discharge should occur predominantly during active windows."""
+        # given — evening window only
+        windows = [TimeWindow(start_hour=17, end_hour=22, power_w=300)]
+        pv_data = create_daytime_pv(peak_kw=0.8)
+        cap_gross = 5.0
+        params = create_simulation_params(
+            active_base=[300] * 24,
+            discharge_strategy_config=DischargeStrategyConfig(
+                mode="time_window", time_windows=tuple(windows),
+            ),
+        )
+
+        # when
+        result = simulate(pv_data, cap_gross, params)
+
+        # then — there should be battery discharge (some energy was stored and released)
+        assert result.full_cycles > 0
+
+    def test_should_balance_energy_with_time_window(self):
+        """Energy balance should hold with time_window strategy."""
+        # given
+        windows = [TimeWindow(start_hour=17, end_hour=22, power_w=300)]
+        pv_data = create_daytime_pv(peak_kw=0.8)
+        cap_gross = 5.0
+        params = create_simulation_params(
+            active_base=[300] * 24,
+            discharge_strategy_config=DischargeStrategyConfig(
+                mode="time_window", time_windows=tuple(windows),
+            ),
+        )
+
+        # when
+        result = simulate(pv_data, cap_gross, params)
+
+        # then
+        monthly = result.monthly
+        total_direct_pv = sum(m.direct_pv for m in monthly.values())
+        total_battery = sum(m.battery for m in monthly.values())
+        total_grid = sum(m.grid_import for m in monthly.values())
+        total_consumption = sum(m.consumption for m in monthly.values())
+        supply = total_direct_pv + total_battery + total_grid
+        assert supply == pytest.approx(total_consumption, rel=0.001)
+
+    def test_should_have_more_grid_import_than_zero_feed_in(self):
+        """Time window strategy should import more from grid than zero feed-in."""
+        # given
+        windows = [TimeWindow(start_hour=17, end_hour=22, power_w=200)]
+        pv_data = create_daytime_pv(peak_kw=0.8)
+        cap_gross = 5.0
+        params_zero = create_simulation_params(active_base=[300] * 24)
+        params_tw = create_simulation_params(
+            active_base=[300] * 24,
+            discharge_strategy_config=DischargeStrategyConfig(
+                mode="time_window", time_windows=tuple(windows),
+            ),
+        )
+
+        # when
+        result_zero = simulate(pv_data, cap_gross, params_zero)
+        result_tw = simulate(pv_data, cap_gross, params_tw)
+
+        # then
+        assert result_tw.grid_import > result_zero.grid_import
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

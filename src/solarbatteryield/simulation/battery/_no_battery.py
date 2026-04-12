@@ -23,7 +23,7 @@ class NoBattery(Battery):
         curtailed = gen_dc - dc_to_inverter
 
         # Direct PV with sub-hourly load regression
-        fraction = get_direct_pv_fraction(load * 1000, gen_ac * 1000)
+        fraction = get_direct_pv_fraction(load * 1000, gen_ac * 1000, self.min_load_w)
         direct_pv = fraction * min(load, gen_ac)
 
         return HourlyResult(

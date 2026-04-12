@@ -28,14 +28,15 @@ Usage:
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from solarbatteryield.models import SimulationInput, SimulationResult
-from solarbatteryield.simulation import simulate
-
 from conftest import (
     create_simulation_params,
     create_synthetic_pv_data,
     create_realistic_load_profile,
 )
+from solarbatteryield.models import (
+    SimulationInput, SimulationResult, DischargeStrategyConfig, TimeWindow,
+)
+from solarbatteryield.simulation import simulate
 
 
 def _result_to_snapshot_dict(result: SimulationResult) -> dict:
@@ -45,11 +46,12 @@ def _result_to_snapshot_dict(result: SimulationResult) -> dict:
     Rounds values to 2 decimal places for readability and to avoid
     floating-point precision issues across different platforms.
     """
+
     def round_val(v: float) -> float:
         rounded = round(float(v), 2)
         # Avoid negative zero in output
         return 0.0 if rounded == 0.0 else rounded
-    
+
     monthly_data = {}
     for month, data in result.monthly.items():
         monthly_data[month] = {
@@ -60,7 +62,7 @@ def _result_to_snapshot_dict(result: SimulationResult) -> dict:
             "consumption": round_val(data.consumption),
             "pv_generation": round_val(data.pv_generation),
         }
-    
+
     return {
         "totals": {
             "grid_import": round_val(result.grid_import),
@@ -117,12 +119,11 @@ class TestScenarioWithBattery:
             active_base=create_realistic_load_profile(),
         )
         pv_data = create_synthetic_pv_data()
-        
+
         return {
             "small_battery": simulate(pv_data, cap_gross=3.0, params=params),
             "large_battery": simulate(pv_data, cap_gross=10.0, params=params),
         }
-
 
     def test_snapshot_small_battery_results(self, scenario_results, snapshot: SnapshotAssertion):
         """Should match snapshot for 3kWh battery scenario."""
@@ -149,7 +150,7 @@ class TestScenarioDcVsAcCoupling:
         """Run simulations with DC and AC coupling."""
         pv_data = create_synthetic_pv_data()
         battery_capacity = 5.0
-        
+
         params_dc = _create_snapshot_params(
             dc_coupled=True,
             active_base=create_realistic_load_profile(),
@@ -158,12 +159,11 @@ class TestScenarioDcVsAcCoupling:
             dc_coupled=False,
             active_base=create_realistic_load_profile(),
         )
-        
+
         return {
             "dc_coupled": simulate(pv_data, cap_gross=battery_capacity, params=params_dc),
             "ac_coupled": simulate(pv_data, cap_gross=battery_capacity, params=params_ac),
         }
-
 
     def test_snapshot_dc_coupled_results(self, coupling_results, snapshot: SnapshotAssertion):
         """Should match snapshot for DC-coupled scenario."""
@@ -189,7 +189,7 @@ class TestScenarioInverterLimit:
     def inverter_results(self) -> dict[str, SimulationResult]:
         """Run simulations with and without inverter limit."""
         pv_data = create_synthetic_pv_data()
-        
+
         params_limited = _create_snapshot_params(
             inverter_limit_kw=1.5,  # 1.5 kW limit with 2 kW peak PV
             active_base=[100] * 24,  # Low load to maximize surplus
@@ -198,12 +198,11 @@ class TestScenarioInverterLimit:
             inverter_limit_kw=None,
             active_base=[100] * 24,
         )
-        
+
         return {
             "limited": simulate(pv_data, cap_gross=0.0, params=params_limited),
             "unlimited": simulate(pv_data, cap_gross=0.0, params=params_unlimited),
         }
-
 
     def test_snapshot_limited_inverter_results(self, inverter_results, snapshot: SnapshotAssertion):
         """Should match snapshot for limited inverter scenario."""
@@ -234,7 +233,6 @@ class TestScenarioSeasonalBehavior:
         pv_data = create_synthetic_pv_data()
         return simulate(pv_data, cap_gross=5.0, params=params)
 
-
     def test_snapshot_seasonal_results(self, seasonal_result, snapshot: SnapshotAssertion):
         """Should match snapshot for seasonal scenario with 5kWh battery."""
         # when
@@ -244,8 +242,124 @@ class TestScenarioSeasonalBehavior:
         assert result_dict == snapshot
 
 
+class TestScenarioBaseLoadStrategy:
+    """Snapshot tests for base_load discharge strategy."""
+
+    @pytest.fixture(scope="class")
+    def base_load_results(self) -> dict[str, SimulationResult]:
+        """Run simulations with base_load strategy at different power levels."""
+        pv_data = create_synthetic_pv_data()
+        battery_capacity = 5.0
+
+        results = {}
+        for power_w in (100, 300):
+            params = _create_snapshot_params(
+                active_base=create_realistic_load_profile(),
+                discharge_strategy_config=DischargeStrategyConfig(
+                    mode="base_load", base_load_w=power_w,
+                ),
+            )
+            results[f"base_load_{power_w}w"] = simulate(
+                pv_data, cap_gross=battery_capacity, params=params,
+            )
+        return results
+
+    def test_snapshot_base_load_100w(self, base_load_results, snapshot: SnapshotAssertion):
+        """Should match snapshot for base_load 100W strategy."""
+        # when
+        result_dict = _result_to_snapshot_dict(base_load_results["base_load_100w"])
+
+        # then
+        assert result_dict == snapshot
+
+    def test_snapshot_base_load_300w(self, base_load_results, snapshot: SnapshotAssertion):
+        """Should match snapshot for base_load 300W strategy."""
+        # when
+        result_dict = _result_to_snapshot_dict(base_load_results["base_load_300w"])
+
+        # then
+        assert result_dict == snapshot
+
+
+class TestScenarioTimeWindowStrategy:
+    """Snapshot tests for time_window discharge strategy."""
+
+    @pytest.fixture(scope="class")
+    def time_window_result(self) -> SimulationResult:
+        """Run simulation with evening time window strategy."""
+        pv_data = create_synthetic_pv_data()
+        params = _create_snapshot_params(
+            active_base=create_realistic_load_profile(),
+            discharge_strategy_config=DischargeStrategyConfig(
+                mode="time_window",
+                time_windows=(
+                    TimeWindow(start_hour=17, end_hour=22, power_w=300),
+                ),
+            ),
+        )
+        return simulate(pv_data, cap_gross=5.0, params=params)
+
+    def test_snapshot_time_window_evening(self, time_window_result, snapshot: SnapshotAssertion):
+        """Should match snapshot for evening time window strategy."""
+        # when
+        result_dict = _result_to_snapshot_dict(time_window_result)
+
+        # then
+        assert result_dict == snapshot
+
+
+class TestScenarioStrategyComparison:
+    """Snapshot tests comparing all three strategies with identical setup."""
+
+    @pytest.fixture(scope="class")
+    def strategy_results(self) -> dict[str, SimulationResult]:
+        """Run simulations with all three strategies for direct comparison."""
+        pv_data = create_synthetic_pv_data()
+        battery_capacity = 5.0
+        load_profile = create_realistic_load_profile()
+
+        strategies = {
+            "zero_feed_in": DischargeStrategyConfig(mode="zero_feed_in"),
+            "base_load_200w": DischargeStrategyConfig(mode="base_load", base_load_w=200),
+            "time_window_evening": DischargeStrategyConfig(
+                mode="time_window",
+                time_windows=(TimeWindow(start_hour=17, end_hour=22, power_w=200),),
+            ),
+        }
+
+        results = {}
+        for name, strategy in strategies.items():
+            params = _create_snapshot_params(
+                active_base=load_profile,
+                discharge_strategy_config=strategy,
+            )
+            results[name] = simulate(pv_data, cap_gross=battery_capacity, params=params)
+        return results
+
+    def test_snapshot_strategy_zero_feed_in(self, strategy_results, snapshot: SnapshotAssertion):
+        """Should match snapshot for zero_feed_in in comparison scenario."""
+        # when
+        result_dict = _result_to_snapshot_dict(strategy_results["zero_feed_in"])
+
+        # then
+        assert result_dict == snapshot
+
+    def test_snapshot_strategy_base_load_200w(self, strategy_results, snapshot: SnapshotAssertion):
+        """Should match snapshot for base_load 200W in comparison scenario."""
+        # when
+        result_dict = _result_to_snapshot_dict(strategy_results["base_load_200w"])
+
+        # then
+        assert result_dict == snapshot
+
+    def test_snapshot_strategy_time_window_evening(self, strategy_results, snapshot: SnapshotAssertion):
+        """Should match snapshot for time_window evening in comparison scenario."""
+        # when
+        result_dict = _result_to_snapshot_dict(strategy_results["time_window_evening"])
+
+        # then
+        assert result_dict == snapshot
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
-

@@ -5,6 +5,7 @@ import base64
 import copy
 import json
 import zlib
+
 import streamlit as st
 
 from solarbatteryield.config import (
@@ -48,8 +49,12 @@ def encode_config() -> str:
     if st.session_state.get("cfg_batt_inverter_preset") == "custom":
         if "_batt_inverter_eff_custom" in st.session_state:
             data["_batt_inverter_eff_custom"] = st.session_state._batt_inverter_eff_custom
+    # Add discharge time windows if using time_window strategy
+    if st.session_state.get("cfg_discharge_strategy") == "time_window":
+        if "_discharge_time_windows" in st.session_state:
+            data["_discharge_time_windows"] = st.session_state._discharge_time_windows
     # Add version for future compatibility
-    data["_version"] = 4
+    data["_version"] = 5
     raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     compressed = zlib.compress(raw, level=9)
     return base64.urlsafe_b64encode(compressed).decode("ascii")
@@ -60,10 +65,10 @@ def decode_config(encoded: str) -> None:
     compressed = base64.urlsafe_b64decode(encoded)
     raw = zlib.decompress(compressed)
     data = json.loads(raw)
-    
+
     # Check version for future migrations
     version = data.get("_version", 0)
-    
+
     for k in CONFIG_KEYS_SIMPLE:
         if k in data:
             st.session_state[k] = data[k]
@@ -92,6 +97,9 @@ def decode_config(encoded: str) -> None:
     # Restore custom battery inverter efficiency curve (version 4+)
     if "_batt_inverter_eff_custom" in data:
         st.session_state._batt_inverter_eff_custom = data["_batt_inverter_eff_custom"]
+    # Restore discharge time windows (version 5+)
+    if "_discharge_time_windows" in data:
+        st.session_state._discharge_time_windows = data["_discharge_time_windows"]
 
 
 def init_session_state() -> None:
@@ -187,7 +195,7 @@ def widget_value(key: str, default=None) -> dict:
     if key in st.session_state:
         if key in LAZY_INIT_KEYS:
             val = st.session_state.pop(key)
-            st.session_state[f"_bak_{key}"] = val      # keep backup current
+            st.session_state[f"_bak_{key}"] = val  # keep backup current
             return {"value": val}
         return {}
     # Key not in session state – check backup, then fall back to default
@@ -233,5 +241,3 @@ def selectbox_index(key: str, options: list, default=None) -> dict:
 
 # Alias for radio buttons which use the same 'index' parameter as selectbox
 radio_index = selectbox_index
-
-

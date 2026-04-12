@@ -58,6 +58,8 @@ def render_storage_config_section() -> None:
         if sv("cfg_dc_coupled") == "AC-gekoppelt":
             _render_batt_inverter_efficiency_section()
 
+        _render_discharge_strategy_section()
+
         st.slider(
             "Zellverluste Laden/Entladen (%)", LIMITS.batt_loss_min, LIMITS.batt_loss_max,
             key="cfg_batt_loss",
@@ -131,12 +133,134 @@ def _show_efficiency_curve_info(preset: str) -> None:
     st.caption(f"η: {eff_10:.1f}% (10%) → {eff_50:.1f}% (50%) → {eff_100:.1f}% (100%)")
 
 
+def _render_discharge_strategy_section() -> None:
+    """Render discharge strategy selection and related inputs."""
+    _strategy_options = {
+        "zero_feed_in": "🎯 Nulleinspeisung",
+        "base_load": "⚡ Grundlastdeckung",
+        "time_window": "🕐 Zeitfenster",
+    }
+    _strategy_keys = list(_strategy_options.keys())
+
+    st.selectbox(
+        "Entladestrategie",
+        options=_strategy_keys,
+        format_func=lambda x: _strategy_options[x],
+        key="cfg_discharge_strategy",
+        help="**Nulleinspeisung**: Batterie passt Leistung kontinuierlich an Hausverbrauch an **(erfordert Smart Meter)**. "
+             "**Grundlastdeckung**: Konstante Einspeisung. "
+             "**Zeitfenster**: Entladung nur in konfigurierten Zeitfenstern.",
+        **selectbox_index("cfg_discharge_strategy", _strategy_keys),
+    )
+
+    strategy = sv("cfg_discharge_strategy")
+
+    if strategy == "base_load":
+        st.number_input(
+            "Leistung (W)", min_value=50, max_value=10000, step=50,
+            key="cfg_discharge_base_load_w",
+            help="Konstante AC-Ausgangsleistung des Systems (PV + Batterie). "
+                 "Nur wenn die Batterie voll ist, wird die Leistung überschritten und die gesamte PV-Leistung eingespeist.",
+            **widget_value("cfg_discharge_base_load_w"),
+        )
+
+    if strategy == "time_window":
+        _render_time_windows_editor()
+
+
+def _render_time_windows_editor() -> None:
+    """Render dynamic time window editor for time_window strategy using data_editor."""
+    # Default time windows optimized for typical H0 load profile
+    # Full day coverage with power levels matching consumption patterns
+    _default_windows = [
+        {"start": 0, "end": 6, "power_w": 150},  # Nacht (Standby)
+        {"start": 6, "end": 9, "power_w": 300},  # Morgens (Frühstück)
+        {"start": 9, "end": 17, "power_w": 200},  # Tagsüber (PV-Stunden)
+        {"start": 17, "end": 0, "power_w": 350},  # Abends (Hauptverbrauch)
+    ]
+
+    if "_discharge_time_windows" not in st.session_state:
+        st.session_state._discharge_time_windows = _default_windows.copy()
+
+    windows = st.session_state._discharge_time_windows
+
+    # Create formatted hour options
+    hour_options = [f"{h:02d}:00" for h in range(24)]
+
+    # Create DataFrame with formatted time strings
+    if windows:
+        df = pd.DataFrame({
+            "start": [f"{w['start']:02d}:00" for w in windows],
+            "end": [f"{w['end']:02d}:00" for w in windows],
+            "power_w": [w["power_w"] for w in windows],
+        })
+    else:
+        df = pd.DataFrame(columns=["start", "end", "power_w"])
+
+    # Configure the data editor with proper column types
+    edited_df = st.data_editor(
+        df,
+        num_rows="dynamic",
+        hide_index=True,
+        width="stretch",
+        key="tw_data_editor",
+        column_config={
+            "start": st.column_config.SelectboxColumn(
+                "Von",
+                options=hour_options,
+                help="Startzeit des Zeitfensters",
+                required=True,
+            ),
+            "end": st.column_config.SelectboxColumn(
+                "Bis",
+                options=hour_options,
+                help="Endzeit des Zeitfensters",
+                required=True,
+            ),
+            "power_w": st.column_config.NumberColumn(
+                "Leistung (W)",
+                min_value=50,
+                max_value=10000,
+                step=50,
+                default=200,
+                help="Entladeleistung in Watt",
+                required=True,
+            ),
+        },
+    )
+
+    # Convert edited DataFrame back to list of dicts with integer hours
+    new_windows = []
+    for _, row in edited_df.iterrows():
+        start_str = row.get("start")
+        end_str = row.get("end")
+        power = row.get("power_w")
+
+        # Parse HH:00 format back to integer, with defaults for new/empty rows
+        start = int(start_str.split(":")[0]) if pd.notna(start_str) and start_str else 17
+        end = int(end_str.split(":")[0]) if pd.notna(end_str) and end_str else 22
+        power_w = int(power) if pd.notna(power) else 200
+
+        new_windows.append({"start": start, "end": end, "power_w": power_w})
+
+    if new_windows != windows:
+        st.session_state._discharge_time_windows = new_windows
+
+
 def _render_soc_sliders() -> None:
     """Render SoC limit sliders with auto-correction for invalid values."""
-    def _on_min_soc_s_change(): st.session_state._last_soc_change = "min_s"
-    def _on_max_soc_s_change(): st.session_state._last_soc_change = "max_s"
-    def _on_min_soc_w_change(): st.session_state._last_soc_change = "min_w"
-    def _on_max_soc_w_change(): st.session_state._last_soc_change = "max_w"
+
+    def _on_min_soc_s_change():
+        st.session_state._last_soc_change = "min_s"
+
+    def _on_max_soc_s_change():
+        st.session_state._last_soc_change = "max_s"
+
+    def _on_min_soc_w_change():
+        st.session_state._last_soc_change = "min_w"
+
+    def _on_max_soc_w_change():
+        st.session_state._last_soc_change = "max_w"
 
     _last_change = st.session_state.get("_last_soc_change")
 
@@ -158,20 +282,19 @@ def _render_soc_sliders() -> None:
             st.session_state.cfg_max_soc_w = _min_w
         st.session_state._last_soc_change = None
 
-    st.slider("Min. Ladezustand Sommer (%)", LIMITS.soc_min, LIMITS.soc_max,
+    st.slider("☀️ Min. Ladezustand Sommer (%)", LIMITS.soc_min, LIMITS.soc_max,
               key="cfg_min_soc_s", on_change=_on_min_soc_s_change,
               help="Kann nicht höher als Max. Ladezustand sein.",
               **widget_value("cfg_min_soc_s"))
-    st.slider("Max. Ladezustand Sommer (%)", LIMITS.soc_min, LIMITS.soc_max,
+    st.slider("☀️ Max. Ladezustand Sommer (%)", LIMITS.soc_min, LIMITS.soc_max,
               key="cfg_max_soc_s", on_change=_on_max_soc_s_change,
               help="Kann nicht niedriger als Min. Ladezustand sein.",
               **widget_value("cfg_max_soc_s"))
-    st.slider("Min. Ladezustand Winter (%)", LIMITS.soc_min, LIMITS.soc_max,
+    st.slider("❄️ Min. Ladezustand Winter (%)", LIMITS.soc_min, LIMITS.soc_max,
               key="cfg_min_soc_w", on_change=_on_min_soc_w_change,
               help="Kann nicht höher als Max. Ladezustand sein.",
               **widget_value("cfg_min_soc_w"))
-    st.slider("Max. Ladezustand Winter (%)", LIMITS.soc_min, LIMITS.soc_max,
+    st.slider("❄️ Max. Ladezustand Winter (%)", LIMITS.soc_min, LIMITS.soc_max,
               key="cfg_max_soc_w", on_change=_on_max_soc_w_change,
               help="Kann nicht niedriger als Min. Ladezustand sein.",
               **widget_value("cfg_max_soc_w"))
-

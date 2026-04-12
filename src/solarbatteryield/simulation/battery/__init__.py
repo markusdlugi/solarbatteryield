@@ -6,20 +6,24 @@ The factory function create_battery() selects the right subclass based on config
 """
 from __future__ import annotations
 
-from solarbatteryield.simulation.battery._base import Battery
-from solarbatteryield.simulation.battery._no_battery import NoBattery
-from solarbatteryield.simulation.battery._dc_coupled import DcCoupledBattery
+from solarbatteryield.models import DischargeStrategyConfig
 from solarbatteryield.simulation.battery._ac_coupled import AcCoupledBattery
+from solarbatteryield.simulation.battery._base import Battery
+from solarbatteryield.simulation.battery._dc_coupled import DcCoupledBattery
+from solarbatteryield.simulation.battery._no_battery import NoBattery
+from solarbatteryield.simulation.battery.strategy import get_discharge_target
 from solarbatteryield.simulation.inverter_efficiency import DEFAULT_INVERTER_EFFICIENCY_CURVE
 
 
 def create_battery(
-    cap_gross: float,
-    batt_eff: float,
-    inv_cap: float,
-    inv_eff_curve: tuple[tuple[int, float], ...],
-    dc_coupled: bool,
-    batt_inv_eff_curve: tuple[tuple[int, float], ...] = DEFAULT_INVERTER_EFFICIENCY_CURVE,
+        cap_gross: float,
+        batt_eff: float,
+        inv_cap: float,
+        inv_eff_curve: tuple[tuple[int, float], ...],
+        dc_coupled: bool,
+        batt_inv_eff_curve: tuple[tuple[int, float], ...] = DEFAULT_INVERTER_EFFICIENCY_CURVE,
+        strategy_config: DischargeStrategyConfig | None = None,
+        min_load_w: float = 0.0,
 ) -> Battery:
     """
     Factory: create the appropriate Battery instance.
@@ -33,6 +37,8 @@ def create_battery(
             batt_eff=batt_eff,
             inv_cap=inv_cap,
             inv_eff_curve=inv_eff_curve,
+            strategy_config=strategy_config,
+            min_load_w=min_load_w,
         )
     if dc_coupled:
         return DcCoupledBattery(
@@ -40,6 +46,8 @@ def create_battery(
             batt_eff=batt_eff,
             inv_cap=inv_cap,
             inv_eff_curve=inv_eff_curve,
+            strategy_config=strategy_config,
+            min_load_w=min_load_w,
         )
     return AcCoupledBattery(
         cap_gross=cap_gross,
@@ -47,6 +55,8 @@ def create_battery(
         inv_cap=inv_cap,
         inv_eff_curve=inv_eff_curve,
         batt_inv_eff_curve=batt_inv_eff_curve,
+        strategy_config=strategy_config,
+        min_load_w=min_load_w,
     )
 
 
@@ -56,5 +66,6 @@ __all__ = [
     "DcCoupledBattery",
     "AcCoupledBattery",
     "create_battery",
+    "DischargeStrategyConfig",
+    "get_discharge_target",
 ]
-
