@@ -1,6 +1,6 @@
 [project]
 name = "solarbatteryield"
-version = "2.1.0"
+version = "2.1.1"
 description = "SolarBatterYield- Analyze PV systems with battery storage"
 readme = "README.md"
 requires-python = ">=3.11"
