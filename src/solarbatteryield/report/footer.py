@@ -5,24 +5,27 @@ from __future__ import annotations
 
 import streamlit as st
 
-from solarbatteryield.state import encode_config
+from solarbatteryield.state import create_share_url
 
 
 def render_share_button() -> None:
     """
     Render the configuration sharing button.
     
-    Creates a shareable URL with all current configuration parameters
-    encoded as a compressed base64 string.
+    Creates a shareable URL with all current configuration parameters.
+    Attempts to create a short URL using DynamoDB persistence, falls back
+    to a long URL with embedded config if unavailable.
     """
     st.divider()
     if st.button("🔗 Link mit aktueller Konfiguration erstellen"):
         try:
-            encoded = encode_config()
             base_url = st.context.headers.get("Origin", "")
-            share_url = f"{base_url}/?cfg={encoded}"
+            share_url, is_short = create_share_url(base_url)
             st.code(share_url, language=None)
-            st.caption("Link kopieren und teilen – alle Parameter sind im Link gespeichert.")
+            if is_short:
+                st.caption("Link kopieren und teilen – Konfiguration wurde gespeichert.")
+            else:
+                st.caption("Link kopieren und teilen – alle Parameter sind im Link gespeichert.")
         except Exception as exc:
             st.error(f"Fehler beim Erstellen des Links: {exc}")
 

@@ -15,6 +15,12 @@ dependencies = [
     "holidays>=0.40",
 ]
 
+[project.optional-dependencies]
+# AWS DynamoDB persistence for short URLs
+dynamodb = [
+    "boto3>=1.28",
+]
+
 
 [dependency-groups]
 dev = [
@@ -22,6 +28,7 @@ dev = [
     "pytest>=8.0",
     "pytest-timeout>=2.0",
     "syrupy>=4.0",
+    "moto[dynamodb]>=5.0",  # AWS mocking for tests
 ]
 
 [project.scripts]

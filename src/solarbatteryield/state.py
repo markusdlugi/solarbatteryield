@@ -4,6 +4,7 @@ Session state management and URL configuration sharing for the PV analysis appli
 import base64
 import copy
 import json
+import logging
 import zlib
 
 import streamlit as st
@@ -13,6 +14,8 @@ from solarbatteryield.config import (
     FLEX_DELTA_DEFAULT, PERIODIC_DELTA_DEFAULT, DEFAULT_MODULES, DEFAULT_STORAGES,
     SESSION_STATE_DEFAULTS
 )
+
+logger = logging.getLogger(__name__)
 
 
 def encode_config() -> str:
@@ -102,17 +105,81 @@ def decode_config(encoded: str) -> None:
         st.session_state._discharge_time_windows = data["_discharge_time_windows"]
 
 
+def create_share_url(base_url: str = "") -> tuple[str, bool]:
+    """
+    Create a shareable URL for the current configuration.
+    
+    Attempts to create a short URL using DynamoDB persistence.
+    Falls back to a long URL with embedded config if DynamoDB is unavailable.
+    
+    Args:
+        base_url: The base URL of the application (e.g., "https://example.com")
+        
+    Returns:
+        Tuple of (url, is_short) where is_short indicates if short URL was created
+    """
+    # Always encode the config (needed for both short and long URLs)
+    encoded = encode_config()
+    
+    # Try to store in DynamoDB for short URL
+    try:
+        from solarbatteryield.persistence import store_config, is_available
+        
+        if is_available():
+            short_key = store_config(encoded)
+            if short_key:
+                return f"{base_url}/?s={short_key}", True
+    except Exception as e:
+        logger.warning(f"Short URL creation failed: {e}")
+    
+    # Fallback to long URL with embedded config
+    return f"{base_url}/?cfg={encoded}", False
+
+
+def _try_load_short_config(short_key: str) -> bool:
+    """
+    Try to load configuration from a short key.
+    
+    Args:
+        short_key: The short key from the URL (e.g., "AbC12xYz")
+        
+    Returns:
+        True if config was loaded successfully, False otherwise
+    """
+    try:
+        from solarbatteryield.persistence import load_config
+        
+        config_data = load_config(short_key)
+        if config_data:
+            decode_config(config_data)
+            return True
+    except Exception as e:
+        logger.warning(f"Failed to load short config: {e}")
+    
+    return False
+
+
 def init_session_state() -> None:
     """Initialize session state with default values."""
     # Restore config from URL on first load
     if "_config_loaded" not in st.session_state:
         st.session_state._config_loaded = True
-        cfg_param = st.query_params.get("cfg")
-        if cfg_param:
-            try:
-                decode_config(cfg_param)
-            except Exception:
-                st.toast("Ungültiger Konfigurations-Link – Standardwerte werden verwendet.")
+        
+        # Check for short URL first (higher priority)
+        short_key = st.query_params.get("s")
+        if short_key:
+            if _try_load_short_config(short_key):
+                pass  # Successfully loaded from short URL
+            else:
+                st.toast("Kurz-URL ungültig oder abgelaufen – Standardwerte werden verwendet.")
+        else:
+            # Fall back to long URL (cfg parameter)
+            cfg_param = st.query_params.get("cfg")
+            if cfg_param:
+                try:
+                    decode_config(cfg_param)
+                except Exception:
+                    st.toast("Ungültiger Konfigurations-Link – Standardwerte werden verwendet.")
 
     # Pre-initialize all config keys with their defaults to avoid
     # "dictionary changed size during iteration" errors when widgets
