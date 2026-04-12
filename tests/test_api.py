@@ -12,10 +12,25 @@ import pytest
 import requests
 import numpy as np
 
+
 # ── Mock streamlit at module level BEFORE importing api ────────────────────────
 # This avoids re-importing numpy (C extensions can't reload within a process).
+# We need to remove any already-loaded modules that depend on streamlit.
+_modules_to_remove = [k for k in sys.modules if 'solarbatteryield.api' in k or 'solarbatteryield.utils' in k]
+_saved_modules = {k: sys.modules.pop(k) for k in _modules_to_remove}
+
+
+def _passthrough_decorator(func=None, **kwargs):
+    """Mock decorator that works both as @decorator and @decorator()."""
+    if func is not None:
+        # Called as @decorator without parentheses
+        return func
+    # Called as @decorator() with parentheses - return another decorator
+    return lambda f: f
+
+
 _mock_st = MagicMock()
-_mock_st.cache_data = lambda **kwargs: lambda f: f
+_mock_st.cache_data = _passthrough_decorator
 
 with patch.dict(sys.modules, {"streamlit": _mock_st}):
     import solarbatteryield.api as api_module

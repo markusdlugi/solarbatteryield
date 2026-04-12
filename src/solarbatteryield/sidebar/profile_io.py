@@ -106,8 +106,14 @@ def parse_yearly_profile_csv(
     except pd.errors.EmptyDataError:
         return None, "CSV-Datei ist leer"
     except pd.errors.ParserError as e:
+        error_msg = str(e).lower()
+        if "no columns" in error_msg or "empty" in error_msg:
+            return None, "CSV-Datei ist leer"
         return None, f"CSV-Parsing-Fehler: {e}"
     except Exception as e:
+        error_msg = str(e).lower()
+        if "no columns" in error_msg or "empty" in error_msg:
+            return None, "CSV-Datei ist leer"
         return None, f"Unerwarteter Fehler: {e}"
 
 

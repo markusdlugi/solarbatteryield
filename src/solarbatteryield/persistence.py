@@ -12,7 +12,7 @@ The key design goals are:
 - Graceful fallback to long URLs on errors
 - Automatic expiration after 3 months via DynamoDB TTL
 
-Environment Variables:
+Configuration (via st.secrets or environment variables):
     SOLARBATTERYIELD_DYNAMODB_TABLE: DynamoDB table name (default: "solarbatteryield")
     AWS_DEFAULT_REGION: AWS region (e.g., "eu-central-1")
     AWS_ACCESS_KEY_ID: AWS access key (or use IAM role)
@@ -22,17 +22,19 @@ Environment Variables:
 from __future__ import annotations
 
 import logging
-import os
 import secrets
 import time
 from functools import lru_cache
 from typing import Any
 
+from solarbatteryield.utils import get_secret
+
 logger = logging.getLogger(__name__)
 
+
 # ─── Configuration ──────────────────────────────────────────────
-# Table name from environment, default for local development
-DYNAMODB_TABLE_NAME = os.environ.get("SOLARBATTERYIELD_DYNAMODB_TABLE", "solarbatteryield")
+# Table name from secrets/environment, default for local development
+DYNAMODB_TABLE_NAME = get_secret("SOLARBATTERYIELD_DYNAMODB_TABLE", "solarbatteryield")
 
 # Key length: 8 characters = ~47 bits of entropy (alphabet is base57)
 # This gives ~111 trillion possible keys, making enumeration impractical
@@ -101,7 +103,8 @@ def _get_dynamodb_table() -> Any:
     Get DynamoDB table resource, cached for reuse.
     
     Returns None if boto3 is not available or connection fails.
-    Uses AWS credentials from environment (IAM role, env vars, or credentials file).
+    Uses AWS credentials from st.secrets (Streamlit Cloud) or environment
+    (IAM role, env vars, or credentials file).
     """
     try:
         import boto3
@@ -115,17 +118,25 @@ def _get_dynamodb_table() -> Any:
         )
 
         # Check for local endpoint (for testing with DynamoDB Local)
-        endpoint_url = os.environ.get("DYNAMODB_ENDPOINT_URL")
+        endpoint_url = get_secret("DYNAMODB_ENDPOINT_URL") or None
 
-        # Get region from environment (required for moto tests)
-        region_name = os.environ.get("AWS_DEFAULT_REGION")
+        # Get region and credentials from secrets/environment
+        region_name = get_secret("AWS_DEFAULT_REGION") or None
+        aws_access_key = get_secret("AWS_ACCESS_KEY_ID") or None
+        aws_secret_key = get_secret("AWS_SECRET_ACCESS_KEY") or None
 
-        dynamodb = boto3.resource(
-            "dynamodb",
-            config=config,
-            endpoint_url=endpoint_url,
-            region_name=region_name,
-        )
+        # Build kwargs for boto3 resource
+        resource_kwargs: dict[str, Any] = {
+            "config": config,
+            "region_name": region_name,
+        }
+        if endpoint_url:
+            resource_kwargs["endpoint_url"] = endpoint_url
+        if aws_access_key and aws_secret_key:
+            resource_kwargs["aws_access_key_id"] = aws_access_key
+            resource_kwargs["aws_secret_access_key"] = aws_secret_key
+
+        dynamodb = boto3.resource("dynamodb", **resource_kwargs)
         table = dynamodb.Table(DYNAMODB_TABLE_NAME)
 
         # Test connection by checking table status
@@ -147,7 +158,7 @@ def _generate_short_key() -> str:
     Generate a cryptographically random short key.
     
     Uses secrets module for secure randomness. The key is 8 characters
-    from a base62 alphabet, providing ~48 bits of entropy.
+    from a base57 alphabet, providing ~47 bits of entropy.
     """
     return "".join(secrets.choice(ALPHABET) for _ in range(SHORT_KEY_LENGTH))
 
