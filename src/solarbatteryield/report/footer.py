@@ -26,6 +26,7 @@ def render_share_button() -> None:
                 st.caption("Link kopieren und teilen – Konfiguration wurde gespeichert.")
             else:
                 st.caption("Link kopieren und teilen – alle Parameter sind im Link gespeichert.")
+            st.caption("🔒 Der Standort wird beim Teilen auf ~2 km gerundet, um deine Privatsphäre zu schützen.")
         except Exception as exc:
             st.error(f"Fehler beim Erstellen des Links: {exc}")
 

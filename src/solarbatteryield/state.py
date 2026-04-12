@@ -17,9 +17,27 @@ from solarbatteryield.config import (
 
 logger = logging.getLogger(__name__)
 
+# Grid step (in degrees) used to snap coordinates when sharing.
+# 0.02° ≈ 2.2 km (latitude) / ~1.4 km (longitude at 50°N).
+# Well within PVGIS spatial resolution (1–5 km) while preventing
+# identification of individual addresses.
+_COORD_STEP = 0.02
+
+
+def _round_coord(value: float | None) -> float | None:
+    """Snap *value* to the nearest multiple of ``_COORD_STEP`` for privacy."""
+    if value is None:
+        return None
+    return round(round(value / _COORD_STEP) * _COORD_STEP, 6)
+
 
 def encode_config() -> str:
-    """Collect current config from session state and encode as URL-safe base64 string."""
+    """Collect current config from session state and encode as URL-safe base64 string.
+
+    Location coordinates (``cfg_lat`` / ``cfg_lon``) are snapped to a
+    ``_COORD_STEP``-degree grid (~2 km) to protect user privacy while
+    remaining accurate enough for the PVGIS solar-radiation model.
+    """
     data = {}
     for k in CONFIG_KEYS_SIMPLE:
         if k in st.session_state:
@@ -56,6 +74,11 @@ def encode_config() -> str:
     if st.session_state.get("cfg_discharge_strategy") == "time_window":
         if "_discharge_time_windows" in st.session_state:
             data["_discharge_time_windows"] = st.session_state._discharge_time_windows
+    # Anonymise location: reduce coordinate precision before persisting
+    for coord_key in ("cfg_lat", "cfg_lon"):
+        if coord_key in data:
+            data[coord_key] = _round_coord(data[coord_key])
+
     # Add version for future compatibility
     data["_version"] = 5
     raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")

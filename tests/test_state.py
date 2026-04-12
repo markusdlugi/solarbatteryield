@@ -131,7 +131,7 @@ class TestConfigEncoding:
         # Calculate what uncompressed would be
         data = {k: v for k, v in mock_streamlit.session_state.items() if
                 not k.startswith("_") or k in ["_active_base", "_flex_delta", "_periodic_delta"]}
-        data["_version"] = 4
+        data["_version"] = 5
         raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         uncompressed_b64 = base64.urlsafe_b64encode(raw_json).decode("ascii")
 
@@ -221,6 +221,113 @@ class TestConfigEncoding:
 
         # then
         assert mock_streamlit.session_state["_inverter_eff_custom"] == custom_efficiency
+
+    def test_should_round_coordinates_for_privacy(self, mock_streamlit):
+        """Should snap lat/lon to a 0.02° grid to protect user privacy.
+
+        0.02° ≈ 2.2 km (latitude) — sufficient for PVGIS while
+        preventing identification of individual addresses.
+        """
+        # given – high-precision coordinates (e.g. from geocoding an exact address)
+        mock_streamlit.session_state.update({
+            "cfg_lat": 48.13714,   # ~11 m precision
+            "cfg_lon": 11.57542,
+            "modules": [],
+            "storages": [],
+            "next_mod_id": 0,
+            "next_stor_id": 0,
+            "_active_base": [],
+            "_flex_delta": [],
+            "_periodic_delta": [],
+        })
+
+        from solarbatteryield.state import encode_config, decode_config
+
+        # when
+        encoded = encode_config()
+
+        mock_streamlit.session_state.clear()
+        decode_config(encoded)
+
+        # then – coordinates should be snapped to nearest 0.02°
+        assert mock_streamlit.session_state["cfg_lat"] == 48.14   # 48.13714 → 48.14
+        assert mock_streamlit.session_state["cfg_lon"] == 11.58   # 11.57542 → 11.58
+
+    def test_should_snap_coordinates_to_002_grid(self, mock_streamlit):
+        """Should snap to 0.02° grid, not just round to 2 decimal places.
+
+        52.523 would round to 52.52 with simple 2-decimal rounding,
+        but should snap to 52.52 (nearest 0.02 multiple) with grid snap.
+        13.415 would round to 13.42, but should snap to 13.42 as well.
+        The key difference shows with e.g. 52.531 → 52.54 (not 52.53).
+        """
+        # given – Berlin coordinates with high precision
+        mock_streamlit.session_state.update({
+            "cfg_lat": 52.531,  # nearest 0.02 multiples: 52.52 and 52.54
+            "cfg_lon": 13.415,  # nearest 0.02 multiples: 13.40 and 13.42
+            "modules": [],
+            "storages": [],
+            "next_mod_id": 0,
+            "next_stor_id": 0,
+            "_active_base": [],
+            "_flex_delta": [],
+            "_periodic_delta": [],
+        })
+
+        from solarbatteryield.state import encode_config, decode_config
+
+        # when
+        encoded = encode_config()
+
+        mock_streamlit.session_state.clear()
+        decode_config(encoded)
+
+        # then – snapped to 0.02° grid (not simple 2-decimal rounding)
+        assert mock_streamlit.session_state["cfg_lat"] == 52.54   # 52.531 → 52.54
+        assert mock_streamlit.session_state["cfg_lon"] == 13.42   # 13.415 → 13.42
+
+    def test_should_not_round_coordinates_in_session_state(self, mock_streamlit):
+        """Encoding should not modify the original session state values."""
+        # given
+        mock_streamlit.session_state.update({
+            "cfg_lat": 48.13714,
+            "cfg_lon": 11.57542,
+            "modules": [],
+            "storages": [],
+            "next_mod_id": 0,
+            "next_stor_id": 0,
+            "_active_base": [],
+            "_flex_delta": [],
+            "_periodic_delta": [],
+        })
+
+        from solarbatteryield.state import encode_config
+
+        # when
+        encode_config()
+
+        # then – original session state should be untouched
+        assert mock_streamlit.session_state["cfg_lat"] == 48.13714
+        assert mock_streamlit.session_state["cfg_lon"] == 11.57542
+
+    def test_should_handle_none_coordinates_when_rounding(self, mock_streamlit):
+        """Should gracefully handle None coordinates during encoding."""
+        # given – no coordinates set
+        mock_streamlit.session_state.update({
+            "modules": [],
+            "storages": [],
+            "next_mod_id": 0,
+            "next_stor_id": 0,
+            "_active_base": [],
+            "_flex_delta": [],
+            "_periodic_delta": [],
+        })
+
+        from solarbatteryield.state import encode_config
+
+        # when / then – should not raise
+        encoded = encode_config()
+        assert isinstance(encoded, str)
 
 
 class TestSessionStateHelpers:
