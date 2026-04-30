@@ -192,7 +192,7 @@ def init_session_state() -> None:
         short_key = st.query_params.get("s")
         if short_key:
             if _try_load_short_config(short_key):
-                pass  # Successfully loaded from short URL
+                st.session_state._loaded_from_shared_url = True
             else:
                 st.toast("Kurz-URL ungültig oder abgelaufen – Standardwerte werden verwendet.")
         else:
@@ -201,6 +201,7 @@ def init_session_state() -> None:
             if cfg_param:
                 try:
                     decode_config(cfg_param)
+                    st.session_state._loaded_from_shared_url = True
                 except Exception:
                     st.toast("Ungültiger Konfigurations-Link – Standardwerte werden verwendet.")
 
@@ -331,3 +332,29 @@ def selectbox_index(key: str, options: list, default=None) -> dict:
 
 # Alias for radio buttons which use the same 'index' parameter as selectbox
 radio_index = selectbox_index
+
+
+def is_shared_url_visit() -> bool:
+    """Return True if the current session was loaded from a shared URL (cfg/s param)."""
+    return st.session_state.get("_loaded_from_shared_url", False)
+
+
+def mark_user_modified() -> None:
+    """Mark that the user has manually modified the configuration."""
+    st.session_state._user_modified_config = True
+
+
+def has_user_modified() -> bool:
+    """Return True if the user has modified the configuration in this session."""
+    return st.session_state.get("_user_modified_config", False)
+
+
+def show_shared_url_hint() -> bool:
+    """Return True if the shared-URL sidebar hint should be shown.
+
+    The hint is shown when the page was opened via a shared link and the
+    user has not yet modified any configuration parameter.
+    """
+    return is_shared_url_visit() and not has_user_modified()
+
+

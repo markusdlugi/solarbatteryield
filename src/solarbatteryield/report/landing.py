@@ -25,7 +25,8 @@ def render_landing_page(missing: list[str]) -> None:
     )
     missing_list = "\n".join(f"- {m}" for m in missing)
     st.info(
-        "Bitte konfiguriere mindestens folgende Parameter in der **Seitenleiste** (⚙️), "
+        "Bitte konfiguriere mindestens folgende Parameter in der "
+        "**Seitenleiste** (» oben links), "
         f"um die Analyse zu starten:\n\n{missing_list}"
     )
 

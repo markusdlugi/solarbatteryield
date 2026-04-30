@@ -10,6 +10,7 @@ from solarbatteryield.sidebar.consumption import render_consumption_section
 from solarbatteryield.sidebar.pv_config import render_pv_modules_section, render_pv_config_section
 from solarbatteryield.sidebar.storage_config import render_storage_options_section, render_storage_config_section
 from solarbatteryield.sidebar.prices import render_prices_section
+from solarbatteryield.state import is_shared_url_visit, mark_user_modified
 
 
 def render_sidebar() -> None:
@@ -25,6 +26,15 @@ def render_sidebar() -> None:
     6. Storage Configuration (battery settings)
     7. Prices & Comparison (economic parameters)
     """
+    # Mark config as modified on any rerun after initial load from shared URL.
+    # On the very first render _sidebar_rendered is not yet set; subsequent
+    # reruns (triggered by widget interaction) will mark the config modified.
+    if is_shared_url_visit():
+        if st.session_state.get("_sidebar_rendered", False):
+            mark_user_modified()
+        else:
+            st.session_state._sidebar_rendered = True
+
     st.sidebar.header("⚙️ Parameter")
 
     render_location_section()
